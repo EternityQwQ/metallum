@@ -108,12 +108,6 @@ public class MixinLevelRenderer {
 		}
 	}
 
-	@WrapOperation(method = "method_75413", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/CommandEncoder;clearDepthTexture(Lcom/mojang/blaze3d/textures/GpuTexture;D)V"))
-	private void skip(CommandEncoder instance, GpuTexture texture, double v, Operation<Void> original) {
-		if (!IrisApi.getInstance().isShaderPackInUse()) {
-			original.call(instance, texture, v);
-		}
-	}
 	// Begin shader rendering after buffers have been cleared.
 	// At this point we've ensured that Minecraft's main framebuffer is cleared.
 	// This is important or else very odd issues will happen with shaders that have a final pass that doesn't write to

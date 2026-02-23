@@ -140,7 +140,7 @@ dependencies {
    // runtimeOnly("net.caffeinemc:fabric-renderer-api-v1:6.0.0")
 
     compileOnly(SODIUM_DEPENDENCY_NEO)
-    runtimeOnly((SODIUM_DEPENDENCY_NEO as String).replace("-mod", ""))
+    runtimeOnly(SODIUM_DEPENDENCY_NEO)
     includeAdditional("io.github.douira:glsl-transformer:3.0.0-pre3")
     includeAdditional("org.anarres:jcpp:1.4.14")
     includeAdditional("org.antlr:antlr4-runtime:4.13.1")
