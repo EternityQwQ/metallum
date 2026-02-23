@@ -1,5 +1,6 @@
 package net.irisshaders.iris.shadows.frustum.fallback;
 
+import net.caffeinemc.mods.sodium.client.render.chunk.occlusion.OcclusionCuller;
 import net.caffeinemc.mods.sodium.client.render.viewport.Viewport;
 import net.caffeinemc.mods.sodium.client.render.viewport.ViewportProvider;
 import net.irisshaders.iris.shadows.frustum.BoxCuller;
@@ -48,5 +49,31 @@ public class BoxCullingFrustum extends Frustum implements net.caffeinemc.mods.so
 	@Override
 	public int intersectAab(float v, float v1, float v2, float v3, float v4, float v5) {
 		return this.boxCuller.intersectAab(v, v1, v2, v3, v4, v5);
+	}
+
+	private static final float SECTION_HALF_SIZE = OcclusionCuller.CHUNK_SECTION_SIZE;
+
+	@Override
+	public boolean testSection(float x, float y, float z) {
+		float minX = x - SECTION_HALF_SIZE;
+		float maxX = x + SECTION_HALF_SIZE;
+		float minY = y - SECTION_HALF_SIZE;
+		float maxY = y + SECTION_HALF_SIZE;
+		float minZ = z - SECTION_HALF_SIZE;
+		float maxZ = z + SECTION_HALF_SIZE;
+
+		return !boxCuller.isCulledSodium(minX, minY, minZ, maxX, maxY, maxZ);
+	}
+
+	@Override
+	public boolean testSectionExpanded(float x, float y, float z, float extend) {
+		float minX = x - extend;
+		float maxX = x + extend;
+		float minY = y - extend;
+		float maxY = y + extend;
+		float minZ = z - extend;
+		float maxZ = z + extend;
+
+		return !boxCuller.isCulledSodium(minX, minY, minZ, maxX, maxY, maxZ);
 	}
 }

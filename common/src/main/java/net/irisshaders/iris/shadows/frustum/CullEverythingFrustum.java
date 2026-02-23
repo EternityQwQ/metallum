@@ -44,4 +44,14 @@ public class CullEverythingFrustum extends Frustum implements ViewportProvider, 
 	public int intersectAab(float v, float v1, float v2, float v3, float v4, float v5) {
 		return FrustumIntersection.OUTSIDE;
 	}
+
+	@Override
+	public boolean testSection(float v, float v1, float v2) {
+		return false;
+	}
+
+	@Override
+	public boolean testSectionExpanded(float v, float v1, float v2, float v3) {
+		return false;
+	}
 }
