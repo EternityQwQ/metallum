@@ -37,6 +37,7 @@ import net.minecraft.client.CloudStatus;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.renderer.CloudRenderer;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.LevelTargetBundle;
@@ -87,9 +88,6 @@ public abstract class MixinLevelRenderer {
 	private RenderBuffers renderBuffers;
 
 	@Shadow
-	private int ticks;
-
-	@Shadow
 	@Final
 	private LevelTargetBundle targets;
 	@Shadow
@@ -123,7 +121,11 @@ public abstract class MixinLevelRenderer {
 		CapturedRenderingState.INSTANCE.setGbufferProjection(new Matrix4f(((GameRendererStorage) Minecraft.getInstance().gameRenderer).sodium$getProjectionMatrix()));
 		float fakeTickDelta = deltaTracker.getGameTimeDeltaPartialTick(false);
 		CapturedRenderingState.INSTANCE.setTickDelta(fakeTickDelta);
-		CapturedRenderingState.INSTANCE.setCloudTime((ticks + fakeTickDelta) * 0.03F);
+		if (((CloudRendererAccessor) this.cloudRenderer).getTexture() != null) {
+			CapturedRenderingState.INSTANCE.setCloudTime((this.level.getGameTime() % (((CloudRendererAccessor) this.cloudRenderer).getTexture().width() * 400) + fakeTickDelta) * 0.03F);
+		} else {
+			CapturedRenderingState.INSTANCE.setCloudTime(0);
+		}
 
 		pipeline = Iris.getPipelineManager().preparePipeline(Iris.getCurrentDimension());
 

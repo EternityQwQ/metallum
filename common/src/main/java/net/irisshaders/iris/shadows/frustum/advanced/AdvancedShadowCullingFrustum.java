@@ -2,6 +2,7 @@ package net.irisshaders.iris.shadows.frustum.advanced;
 
 import com.sun.management.HotSpotDiagnosticMXBean;
 import com.sun.management.VMOption;
+import net.caffeinemc.mods.sodium.client.render.chunk.occlusion.OcclusionCuller;
 import net.caffeinemc.mods.sodium.client.render.viewport.Viewport;
 import net.caffeinemc.mods.sodium.client.render.viewport.ViewportProvider;
 import net.irisshaders.iris.shadows.frustum.BoxCuller;
@@ -35,7 +36,7 @@ import java.lang.management.ManagementFactory;
  * are not sensitive to the specific internal ordering of planes and corners, in order to avoid potential bugs at the
  * cost of slightly more computations.</p>
  */
-public class AdvancedShadowCullingFrustum extends Frustum implements net.caffeinemc.mods.sodium.client.render.viewport.frustum.Frustum, ViewportProvider {
+public class AdvancedShadowCullingFrustum extends Frustum implements ViewportProvider, net.caffeinemc.mods.sodium.client.render.viewport.frustum.Frustum {
 	private static final int MAX_CLIPPING_PLANES = 13;
 	protected final BoxCuller boxCuller;
 	/**
@@ -448,5 +449,57 @@ public class AdvancedShadowCullingFrustum extends Frustum implements net.caffein
 	@Override
 	public Viewport sodium$createViewport() {
 		return new Viewport(this, position.set(x, y, z));
+	}
+
+	private static final float SECTION_HALF_SIZE = OcclusionCuller.CHUNK_SECTION_SIZE;
+
+	@Override
+	public boolean testSection(float x, float y, float z) {
+		float minX = x - SECTION_HALF_SIZE;
+		float maxX = x + SECTION_HALF_SIZE;
+		float minY = y - SECTION_HALF_SIZE;
+		float maxY = y + SECTION_HALF_SIZE;
+		float minZ = z - SECTION_HALF_SIZE;
+		float maxZ = z + SECTION_HALF_SIZE;
+
+		for (int i = 0; i < planeCount; ++i) {
+			float[] plane = planes[i];
+
+			float testX = (plane[0] < 0.0f) ? minX : maxX;
+			float testY = (plane[1] < 0.0f) ? minY : maxY;
+			float testZ = (plane[2] < 0.0f) ? minZ : maxZ;
+
+			if (Math.fma(plane[0], testX,
+				Math.fma(plane[1], testY,
+					plane[2] * testZ)) < -plane[3]) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	@Override
+	public boolean testSectionExpanded(float originX, float originY, float originZ, float extend) {
+		float minX = originX - extend;
+		float maxX = originX + extend;
+		float minY = originY - extend;
+		float maxY = originY + extend;
+		float minZ = originZ - extend;
+		float maxZ = originZ + extend;
+
+		for (int i = 0; i < planeCount; ++i) {
+			float[] plane = planes[i];
+
+			float testX = (plane[0] < 0.0f) ? minX : maxX;
+			float testY = (plane[1] < 0.0f) ? minY : maxY;
+			float testZ = (plane[2] < 0.0f) ? minZ : maxZ;
+
+			if (Math.fma(plane[0], testX, Math.fma(plane[1], testY, plane[2] * testZ)) < -plane[3]) {
+				return false;
+			}
+		}
+
+		return true;
 	}
 }
