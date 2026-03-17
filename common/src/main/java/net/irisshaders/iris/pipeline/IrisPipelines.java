@@ -78,6 +78,7 @@ public class IrisPipelines {
 		assignToMain(RenderPipelines.LEASH, p -> ShaderKey.LEASH);
 		assignToMain(RenderPipelines.CLOUDS, p -> ShaderKey.CLOUDS);
 		assignToMain(RenderPipelines.FLAT_CLOUDS, p -> ShaderKey.CLOUDS);
+		assignToMain(RenderPipelines.BANNER_PATTERN, p -> getTranslucent(p));
 
 		assignToShadow(RenderPipelines.SOLID_BLOCK, p -> ShaderKey.SHADOW_TERRAIN_CUTOUT);
 		assignToShadow(RenderPipelines.SOLID_TERRAIN, p -> ShaderKey.SHADOW_TERRAIN_CUTOUT);
@@ -98,6 +99,7 @@ public class IrisPipelines {
 		assignToShadow(RenderPipelines.ENTITY_TRANSLUCENT_EMISSIVE, p -> ShaderKey.SHADOW_ENTITIES_CUTOUT);
 		assignToShadow(RenderPipelines.BREEZE_WIND, p -> ShaderKey.SHADOW_ENTITIES_CUTOUT);
 		assignToShadow(RenderPipelines.EYES, p -> ShaderKey.SHADOW_ENTITIES_CUTOUT);
+		assignToShadow(RenderPipelines.BANNER_PATTERN, p -> ShaderKey.SHADOW_ENTITIES_CUTOUT);
 
 		assignToShadow(RenderPipelines.ENERGY_SWIRL, p -> ShaderKey.SHADOW_ENTITIES_CUTOUT);
 		assignToShadow(RenderPipelines.GLINT, p -> ShaderKey.SHADOW_ENTITIES_CUTOUT);
@@ -204,7 +206,7 @@ public class IrisPipelines {
 		if (HandRenderer.INSTANCE.isActive()) {
 			return (HandRenderer.INSTANCE.isRenderingSolid() ? ShaderKey.HAND_CUTOUT_DIFFUSE : ShaderKey.HAND_WATER_DIFFUSE);
 		} else if (isBlockEntities(pipeline)) {
-			return (ShaderKey.BLOCK_ENTITY);
+			return (ShaderKey.BE_TRANSLUCENT);
 		} else {
 			return (ShaderKey.ENTITIES_TRANSLUCENT);
 		}

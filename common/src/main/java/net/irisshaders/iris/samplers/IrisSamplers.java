@@ -36,9 +36,7 @@ public class IrisSamplers {
 	public static final ImmutableSet<Integer> WORLD_RESERVED_TEXTURE_UNITS = ImmutableSet.of(0, 1, 2);
 	public static final ImmutableSet<Integer> SODIUM_RESERVED_TEXTURE_UNITS = ImmutableSet.of(0, 2);
 
-	// TODO: In composite programs, there shouldn't be any reserved textures.
-	// We need a way to restore these texture bindings.
-	public static final ImmutableSet<Integer> COMPOSITE_RESERVED_TEXTURE_UNITS = ImmutableSet.of(1, 2);
+	public static final ImmutableSet<Integer> COMPOSITE_RESERVED_TEXTURE_UNITS = ImmutableSet.of();
 
 	private static final GpuSampler[] terrain = new GpuSampler[16];
 	private static final GlSampler[] terrainS = new GlSampler[16];

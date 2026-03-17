@@ -55,6 +55,7 @@ public class StandardMacros {
 		define(standardDefines, getVendor());
 		define(standardDefines, getRenderer());
 		define(standardDefines, "IS_IRIS");
+		define(standardDefines, "IRIS_REQUIRES_SEPARATE_ENTITY_DRAWS");
 		define(standardDefines, "MAX_COLOR_BUFFERS", String.valueOf(IrisLimits.MAX_COLOR_BUFFERS));
 		define(standardDefines, "IRIS_HAS_TRANSLUCENCY_SORTING");
 		define(standardDefines, "IRIS_TAG_SUPPORT", "2");
