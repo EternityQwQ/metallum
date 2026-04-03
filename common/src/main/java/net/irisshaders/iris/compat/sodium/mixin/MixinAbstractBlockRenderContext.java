@@ -13,12 +13,11 @@ import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.state.BlockState;
-import org.jetbrains.annotations.Nullable;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import net.caffeinemc.mods.sodium.client.render.model.MutableQuadViewImpl;
 
@@ -36,6 +35,10 @@ public class MixinAbstractBlockRenderContext {
 	@Shadow
 	protected BlockState state;
 
+	@Shadow
+	@Final
+	private AbstractBlockRenderContext.BlockEmitter editorQuad;
+
 	@Inject(method = "bufferDefaultModel", at = @At(value = "INVOKE", target = "Lnet/caffeinemc/mods/sodium/client/services/PlatformModelAccess;getQuads(Lnet/minecraft/client/renderer/block/BlockAndTintGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/client/renderer/block/dispatch/BlockStateModelPart;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/Direction;Lnet/minecraft/util/RandomSource;)Ljava/util/List;"))
 	private void checkDirectionNeo(BlockStateModelPart part, Predicate<Direction> cullTest, Consumer<MutableQuadViewImpl> emitter, CallbackInfo ci, @Local Direction cullFace) {
 		if ((Object) this instanceof BlockRenderer r && WorldRenderingSettings.INSTANCE.getBlockStateIds() != null && cullFace != null) {
@@ -44,34 +47,6 @@ public class MixinAbstractBlockRenderContext {
 				((VertexEncoderInterface) r).overrideBlock(WorldRenderingSettings.INSTANCE.getBlockStateIds().getInt(override));
 			}
 		}
-	}
-
-	@ModifyArg(
-		method = "bufferDefaultModel",
-		at = @At(
-			value = "INVOKE",
-			target = "Lnet/caffeinemc/mods/sodium/client/render/model/MutableQuadViewImpl;setRenderType(Lnet/minecraft/client/renderer/chunk/ChunkSectionLayer;)Lnet/caffeinemc/mods/sodium/client/render/model/MutableQuadViewImpl;"
-		)
-	)
-	private @Nullable ChunkSectionLayer handleShaderPackTransparency(
-		@Nullable ChunkSectionLayer renderLayer
-	) {
-		if (!((Object) this instanceof BlockRenderer) || WorldRenderingSettings.INSTANCE.getBlockTypeIds() == null) {
-			return renderLayer;
-		}
-		BlockState state = this.state;
-		if (state == null) {
-			return renderLayer;
-		}
-		BlockRenderType blockRenderType = WorldRenderingSettings.INSTANCE.getBlockTypeIds().get(state.getBlock());
-		if (blockRenderType == null) {
-			return renderLayer;
-		}
-		return switch (blockRenderType) {
-			case SOLID -> ChunkSectionLayer.SOLID;
-			case CUTOUT, CUTOUT_MIPPED -> ChunkSectionLayer.CUTOUT;
-			case TRANSLUCENT -> ChunkSectionLayer.TRANSLUCENT;
-		};
 	}
 
 	@Inject(method = "bufferDefaultModel", at = @At(value = "TAIL"))

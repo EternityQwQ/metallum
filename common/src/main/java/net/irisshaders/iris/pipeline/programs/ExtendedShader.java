@@ -203,12 +203,12 @@ public class ExtendedShader extends GlProgram implements IrisProgram {
 
 		ImmediateState.usingTessellation = usesTessellation;
 
-		this.samplers.update();
-		uniforms.update();
-
 		if (!hasUV) {
 			IrisRenderSystem.bindTextureToUnit(GL46C.GL_TEXTURE_2D, 0, pipeline.getWhitePixel().getTexture().iris$getGlId());
 		}
+
+		this.samplers.update();
+		uniforms.update();
 
 		if (!samplers.containsKey("Sampler1")) {
 			IrisRenderSystem.bindTextureToUnit(GL46C.GL_TEXTURE_2D, 1, pipeline.getBiggerWhitePixel().getTexture().iris$getGlId());
