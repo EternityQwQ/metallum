@@ -9,7 +9,7 @@ import org.jspecify.annotations.Nullable;
 import java.lang.foreign.MemorySegment;
 
 @Environment(EnvType.CLIENT)
-public final class MTLCommandQueue implements AutoCloseable {
+public final class MTLCommandQueue {
     private MemorySegment handle;
 
     private MTLCommandQueue(final MemorySegment handle) {
@@ -24,15 +24,14 @@ public final class MTLCommandQueue implements AutoCloseable {
         return new MTLCommandQueue(handle);
     }
 
-    public MemorySegment makeCommandBuffer(@Nullable final String label) {
+    public MTLCommandBuffer makeCommandBuffer(@Nullable final String label) {
         MemorySegment commandBuffer = MetalNativeBridge.INSTANCE.MTLCommandQueue_makeCommandBuffer(this.handle, label);
         if (MetalProbe.isNullHandle(commandBuffer)) {
             throw new IllegalStateException("Failed to create MTLCommandBuffer");
         }
-        return commandBuffer;
+        return new MTLCommandBuffer(commandBuffer);
     }
 
-    @Override
     public void close() {
         if (MetalProbe.isNullHandle(this.handle)) {
             return;

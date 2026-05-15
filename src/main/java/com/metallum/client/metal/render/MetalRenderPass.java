@@ -82,7 +82,7 @@ final class MetalRenderPass implements RenderPassBackend {
     public void pushDebugGroup(final Supplier<String> label) {
         this.pushedDebugGroups++;
         if (this.device.useLabels()) {
-            MetalNativeBridge.INSTANCE.MTLCommandBuffer_pushDebugGroup(this.encoder.commandBuffer(), label.get());
+            this.encoder.commandBuffer().pushDebugGroup(label.get());
         }
     }
 
@@ -93,7 +93,7 @@ final class MetalRenderPass implements RenderPassBackend {
         }
         this.pushedDebugGroups--;
         if (this.device.useLabels()) {
-            MetalNativeBridge.INSTANCE.MTLCommandBuffer_popDebugGroup(this.encoder.commandBuffer());
+            this.encoder.commandBuffer().popDebugGroup();
         }
     }
 

@@ -78,11 +78,9 @@ final class MetalSurface implements GpuSurfaceBackend {
         metalEncoder.endBlitEncoder();
         metalEncoder.endRenderEncoder();
         MetalGpuTexture source = (MetalGpuTexture) textureView.texture();
-        MetalNativeBridge.INSTANCE.MTLCommandBuffer_encodePresentTextureToDrawable(
-                metalEncoder.commandBuffer(),
-                this.drawable,
-                source.nativeHandle()
-        );
+        var commandBuffer = metalEncoder.commandBuffer();
+        commandBuffer.encodePresentTextureToDrawable(this.drawable, source.nativeHandle());
+        commandBuffer.presentDrawable(this.drawable);
 
         this.pendingPresentEncoder = metalEncoder;
     }
@@ -92,17 +90,10 @@ final class MetalSurface implements GpuSurfaceBackend {
         if (this.pendingPresentEncoder == null || !this.hasDrawable()) {
             throw new IllegalStateException("Metal surface has no pending drawable present");
         }
-        MemorySegment presentedDrawable = this.drawable;
-        this.drawable = MemorySegment.NULL;
-        MetalCommandEncoder encoder = this.pendingPresentEncoder;
-        this.pendingPresentEncoder = null;
-        encoder.submit();
 
-        MemorySegment presentCommandBuffer = this.device.commandQueue.makeCommandBuffer(this.device.useLabels() ? "Metallum present" : null);
-        MetalNativeBridge.INSTANCE.MTLCommandBuffer_presentDrawable(presentCommandBuffer, presentedDrawable);
-        MetalNativeBridge.INSTANCE.MTLCommandBuffer_commit(presentCommandBuffer);
-        MetalNativeBridge.INSTANCE.metallum_release_object(presentCommandBuffer);
-        MetalNativeBridge.INSTANCE.metallum_release_object(presentedDrawable);
+        drawable = MemorySegment.NULL;
+        pendingPresentEncoder.submit();
+        pendingPresentEncoder = null;
     }
 
     @Override
