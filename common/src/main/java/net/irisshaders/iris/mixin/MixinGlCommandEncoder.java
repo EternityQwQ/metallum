@@ -22,6 +22,7 @@ import net.irisshaders.iris.pipeline.programs.IrisProgram;
 import net.irisshaders.iris.shadows.ShadowRenderingState;
 import net.irisshaders.iris.vertices.ImmediateState;
 import org.jetbrains.annotations.Nullable;
+import org.lwjgl.opengl.GL33C;
 import org.lwjgl.opengl.GL46C;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -53,7 +54,7 @@ public class MixinGlCommandEncoder {
 	private List<IrisProgram> programsToClear = new ArrayList<>();
 
 	// Do not change the viewport in the shadow pass.
-	@Redirect(method = "createRenderPass(Ljava/util/function/Supplier;Lcom/mojang/blaze3d/textures/GpuTextureView;Ljava/util/OptionalInt;Lcom/mojang/blaze3d/textures/GpuTextureView;Ljava/util/OptionalDouble;)Lcom/mojang/blaze3d/systems/RenderPassBackend;", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/opengl/GlStateManager;_viewport(IIII)V"))
+	@Redirect(method = "createRenderPass", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/opengl/GlStateManager;_viewport(IIII)V"))
 	private void changeViewport(int i, int j, int k, int l) {
 		if (ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
 			return;
@@ -63,7 +64,7 @@ public class MixinGlCommandEncoder {
 	}
 
 	// Do not change the viewport in the shadow pass.
-	@Redirect(method = "createRenderPass(Ljava/util/function/Supplier;Lcom/mojang/blaze3d/textures/GpuTextureView;Ljava/util/OptionalInt;Lcom/mojang/blaze3d/textures/GpuTextureView;Ljava/util/OptionalDouble;)Lcom/mojang/blaze3d/systems/RenderPassBackend;", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/opengl/GlStateManager;_glBindFramebuffer(II)V"))
+	@Redirect(method = "createRenderPass", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/opengl/GlStateManager;_glBindFramebuffer(II)V"))
 	private void changeFramebuffer(int i, int j) {
 		if (ShadowRenderingState.areShadowsCurrentlyBeingRendered() || ImmediateState.safeToMultiply) {
 			this.tempFBO = j;
@@ -129,7 +130,7 @@ public class MixinGlCommandEncoder {
 				}
 
 				if (pipeline.getColorTargetState().blendFunction().isPresent()) {
-					GlStateManager._enableBlend();
+					GlStateManager._enableBlend(0);
 					BlendFunction blendFunction = (BlendFunction)pipeline.getColorTargetState().blendFunction().get();
 					GlStateManager._blendFuncSeparate(
 						GlConst.toGl(blendFunction.color().sourceFactor()),
@@ -138,13 +139,22 @@ public class MixinGlCommandEncoder {
 						GlConst.toGl(blendFunction.alpha().destFactor())
 					);
 				} else {
-					GlStateManager._disableBlend();
+					GlStateManager._disableBlend(0);
 				}
 
 				GlStateManager._polygonMode(1032, GlConst.toGl(pipeline.getPolygonMode()));
 				GlStateManager._colorMask(pipeline.getColorTargetState().writeMask());
 			}
 		}
+	}
+
+	@Redirect(method = "trySetup", at = @At(value = "INVOKE", target = "Lorg/lwjgl/opengl/GL33C;glDrawBuffers([I)V"))
+	private void iris$skipShadowDrawBuffers(int[] buffers) {
+		if (ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
+			return;
+		}
+
+		GL33C.glDrawBuffers(buffers);
 	}
 
 	@Inject(method = "trySetup", at = @At("RETURN"))

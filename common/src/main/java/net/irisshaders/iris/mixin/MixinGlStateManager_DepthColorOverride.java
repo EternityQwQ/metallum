@@ -31,7 +31,7 @@ public class MixinGlStateManager_DepthColorOverride {
 		}
 	}
 
-	@Redirect(method = "_drawElements", at = @At(value = "INVOKE", target = "Lorg/lwjgl/opengl/GL11;glDrawElements(IIIJ)V"), remap = false)
+	@Redirect(method = "_drawElements", at = @At(value = "INVOKE", target = "Lorg/lwjgl/opengl/GL33C;glDrawElements(IIIJ)V"), remap = false)
 	private static void iris$modify(int mode, int count, int type, long indices) {
 		if (mode == GL43C.GL_TRIANGLES && ImmediateState.usingTessellation) {
 			mode = GL43C.GL_PATCHES;

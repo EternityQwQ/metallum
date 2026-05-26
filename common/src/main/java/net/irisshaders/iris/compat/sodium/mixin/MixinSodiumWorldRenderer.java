@@ -1,5 +1,7 @@
 package net.irisshaders.iris.compat.sodium.mixin;
 
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.ref.LocalBooleanRef;
 import com.mojang.blaze3d.vertex.PoseStack;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
@@ -13,7 +15,6 @@ import net.irisshaders.iris.shadows.ShadowRenderingState;
 import net.irisshaders.iris.uniforms.CapturedRenderingState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderBuffers;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
@@ -74,16 +75,15 @@ public class MixinSodiumWorldRenderer implements ShadowRenderListAccess {
 		return instance.needsUpdate();
 	}
 
-	@Redirect(method = "setupTerrain", remap = false,
+	@WrapOperation(method = "setupTerrain",
 		at = @At(value = "INVOKE",
-			target = "Lnet/caffeinemc/mods/sodium/client/render/chunk/RenderSectionManager;needsUpdate()Z", ordinal = 1,
-			remap = false))
-	private boolean iris$forceEndGraphRebuild(RenderSectionManager instance) {
+			target = "Lnet/caffeinemc/mods/sodium/client/render/chunk/RenderSectionManager;needsUpdate()Z"))
+	private boolean iris$forceEndGraphRebuild(RenderSectionManager instance, Operation<Boolean> original) {
 		if (ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
 			// TODO: Detect when the sun/moon isn't moving
 			return false;
 		} else {
-			return instance.needsUpdate();
+			return original.call(instance);
 		}
 	}
 

@@ -88,7 +88,7 @@ public abstract class MixinCompiledShaderProgram implements ShaderInstanceInterf
 		}
 	}
 
-	@Redirect(method = "setupBindGroupLayouts", at = @At(value = "INVOKE", target = "Lorg/lwjgl/opengl/GL31;glGetUniformBlockIndex(ILjava/lang/CharSequence;)I"))
+	@Redirect(method = "setupBindGroupLayouts", at = @At(value = "INVOKE", target = "Lorg/lwjgl/opengl/GL33C;glGetUniformBlockIndex(ILjava/lang/CharSequence;)I"))
 	private int iris$changeIndex(int program, CharSequence uniformBlockName) {
 		if (this instanceof IrisProgram is) {
 			return is.iris$getBlockIndex(program, uniformBlockName);

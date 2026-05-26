@@ -17,9 +17,9 @@ public class MixinPreparedRenderType implements WrappedPreparedRenderType {
 
 	@WrapMethod(method = "drawFromBuffer(Lcom/mojang/blaze3d/buffers/GpuBuffer;Lcom/mojang/blaze3d/buffers/GpuBuffer;Lcom/mojang/blaze3d/IndexType;III)V")
 	private void iris$wrapBuffer(GpuBuffer vertexBuffer, GpuBuffer indexBuffer, IndexType indexType, int baseVertex, int firstIndex, int indexCount, Operation<Void> original) {
-		wrapper.setup();
+		if (wrapper != null) wrapper.setup();
 		original.call(vertexBuffer, indexBuffer, indexType, baseVertex, firstIndex, indexCount);
-		wrapper.clear();
+		if (wrapper != null) wrapper.clear();
 	}
 	@Override
 	public void setRenderWrapper(RenderingWrapper wrapper) {

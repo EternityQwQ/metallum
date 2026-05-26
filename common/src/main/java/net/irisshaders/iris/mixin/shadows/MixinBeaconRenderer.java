@@ -2,7 +2,6 @@ package net.irisshaders.iris.mixin.shadows;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.irisshaders.iris.shadows.ShadowRenderingState;
-import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.blockentity.BeaconRenderer;
 import net.minecraft.resources.Identifier;

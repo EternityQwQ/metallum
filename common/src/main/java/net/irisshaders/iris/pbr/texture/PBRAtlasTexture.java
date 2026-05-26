@@ -1,7 +1,10 @@
 package net.irisshaders.iris.pbr.texture;
 
+import com.google.common.collect.ImmutableList;
 import com.mojang.blaze3d.GpuFormat;
+import com.mojang.blaze3d.PrimitiveTopology;
 import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.blaze3d.opengl.GlTexture;
 import com.mojang.blaze3d.platform.TextureUtil;
 import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.systems.RenderPass;
@@ -10,10 +13,12 @@ import com.mojang.blaze3d.textures.FilterMode;
 import com.mojang.blaze3d.textures.GpuSampler;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.blaze3d.vulkan.VulkanGpuTexture;
 import net.irisshaders.iris.Iris;
 import net.irisshaders.iris.mixin.texture.SpriteContentsAnimatedTextureAccessor;
 import net.irisshaders.iris.mixin.texture.SpriteContentsFrameInfoAccessor;
 import net.irisshaders.iris.mixin.texture.SpriteContentsTickerAccessor;
+import net.irisshaders.iris.pbr.loader.AtlasPBRLoader;
 import net.irisshaders.iris.pbr.loader.AtlasPBRLoader.PBRTextureAtlasSprite;
 import net.irisshaders.iris.pbr.util.TextureManipulationUtil;
 import net.irisshaders.iris.platform.IrisPlatformHelpers;
@@ -21,10 +26,8 @@ import net.irisshaders.iris.vertices.ImmediateState;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.texture.AbstractTexture;
-import net.minecraft.client.renderer.texture.MissingTextureAtlasSprite;
 import net.minecraft.client.renderer.texture.SpriteContents;
 import net.minecraft.client.renderer.texture.SpriteContents.FrameInfo;
-import net.minecraft.client.renderer.texture.SpriteLoader;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.resources.Identifier;
@@ -37,23 +40,18 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.OptionalInt;
+import java.util.*;
 
 public class PBRAtlasTexture extends AbstractTexture implements PBRDumpable {
 	protected final TextureAtlas atlasTexture;
 	protected final PBRType type;
 	protected final Identifier location;
-	private List<PBRTextureAtlasSprite> sprites = List.of();
 	protected final Map<Identifier, PBRTextureAtlasSprite> texturesByNameToAdd = new HashMap<>();
 	protected Map<Identifier, PBRTextureAtlasSprite> texturesByName = new HashMap<>();
-	private List<SpriteContents.AnimationState> animatedTexturesStates = List.of();
 	protected int width;
 	protected int height;
+	private List<PBRTextureAtlasSprite> sprites = List.of();
+	private List<SpriteContents.AnimationState> animatedTexturesStates = List.of();
 	private GpuBuffer spriteUbos;
 	private int mipLevelCount;
 	private GpuTextureView[] mipViews = new GpuTextureView[0];
@@ -144,7 +142,7 @@ public class PBRAtlasTexture extends AbstractTexture implements PBRDumpable {
 	private void createTexture(int i, int j, int k) {
 		Iris.logger.info("Created: {}x{}x{} {}-atlas", i, j, k, this.location);
 		GpuDevice gpuDevice = RenderSystem.getDevice();
-		this.close();
+		this.releaseTextures();
 		this.texture = gpuDevice.createTexture(this.location::toString, 15, GpuFormat.RGBA8_UNORM, i, j, 1, k + 1);
 		this.textureView = gpuDevice.createTextureView(this.texture);
 		this.width = i;
@@ -152,7 +150,7 @@ public class PBRAtlasTexture extends AbstractTexture implements PBRDumpable {
 		this.maxMipLevel = k;
 		this.mipLevelCount = k + 1;
 		this.mipViews = new GpuTextureView[this.mipLevelCount];
-		TextureManipulationUtil.fillWithColor(texture.iris$getGlId(), maxMipLevel, type.getDefaultValue());
+		TextureManipulationUtil.fillWithColor((((GlTexture) texture)).glId(), maxMipLevel, type.getDefaultValue());
 
 		for (int l = 0; l <= this.maxMipLevel; l++) {
 			this.mipViews[l] = gpuDevice.createTextureView(this.texture, l, 1);
@@ -173,38 +171,50 @@ public class PBRAtlasTexture extends AbstractTexture implements PBRDumpable {
 		this.sampler = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST);
 		this.texturesByName = Map.copyOf(texturesByNameToAdd);
 		this.missingSprite = null;
-		List<PBRTextureAtlasSprite> sprites = new ArrayList<>();
-		List<SpriteContents.AnimationState> animationStates = new ArrayList<>();
-		int animatedSpriteCount = (int) texturesByName.values().stream().filter(TextureAtlasSprite::isAnimated).count();
-		int spriteUboSize = Mth.roundToward(SpriteContents.UBO_SIZE, RenderSystem.getDevice().getDeviceInfo().limits().minUniformOffsetAlignment());
-		int uboBlockSize = spriteUboSize * this.mipLevelCount;
-		ByteBuffer spriteUboBuffer = MemoryUtil.memAlloc(animatedSpriteCount * uboBlockSize);
-		int animationIndex = 0;
 
-		for (TextureAtlasSprite sprite : texturesByName.values()) {
+		ImmutableList.Builder<PBRTextureAtlasSprite> spritesBuilder = ImmutableList.builder();
+		int animatedSpriteCount = 0;
+
+		for (PBRTextureAtlasSprite sprite : texturesByName.values()) {
+			spritesBuilder.add(sprite);
 			if (sprite.isAnimated()) {
-				sprite.uploadSpriteUbo(spriteUboBuffer, animationIndex * uboBlockSize, this.maxMipLevel, this.width, this.height, spriteUboSize);
-				animationIndex++;
+				animatedSpriteCount++;
 			}
 		}
 
-		GpuBuffer spriteUbos = animationIndex > 0 ? RenderSystem.getDevice().createBuffer(() -> this.location + " sprite UBOs", 128, spriteUboBuffer) : null;
-		animationIndex = 0;
+		this.sprites = spritesBuilder.build();
+		if (animatedSpriteCount > 0) {
+			ImmutableList.Builder<SpriteContents.AnimationState> animationStates = ImmutableList.builder();
+			int spriteUboSize = Mth.roundToward(SpriteContents.UBO_SIZE, RenderSystem.getDevice().getDeviceInfo().limits().minUniformOffsetAlignment());
+			int uboBlockSize = spriteUboSize * this.mipLevelCount;
+			ByteBuffer spriteUboBuffer = MemoryUtil.memAlloc(animatedSpriteCount * uboBlockSize);
+			int animationIndex = 0;
 
-		for (PBRTextureAtlasSprite spritex : texturesByName.values()) {
-			sprites.add(spritex);
-			if (spritex.isAnimated() && spriteUbos != null) {
-				SpriteContents.AnimationState animationState = spritex.createAnimationState(spriteUbos.slice(animationIndex * uboBlockSize, uboBlockSize), spriteUboSize);
-				animationIndex++;
-				if (animationState != null) {
-					animationStates.add(animationState);
+			for (TextureAtlasSprite spritex : this.sprites) {
+				if (spritex.isAnimated()) {
+					spritex.uploadSpriteUbo(spriteUboBuffer, animationIndex * uboBlockSize, this.maxMipLevel, this.width, this.height, spriteUboSize);
+					animationIndex++;
 				}
 			}
+
+			GpuBuffer spriteUbos = RenderSystem.getDevice().createBuffer(() -> this.location + " sprite UBOs PBR", 128, spriteUboBuffer);
+			animationIndex = 0;
+
+			for (TextureAtlasSprite spritexx : this.sprites) {
+				if (spritexx.isAnimated()) {
+					SpriteContents.AnimationState animationState = spritexx.createAnimationState(spriteUbos.slice(animationIndex * uboBlockSize, uboBlockSize), spriteUboSize);
+					animationIndex++;
+					if (animationState != null) {
+						animationStates.add(animationState);
+					}
+				}
+			}
+
+			this.spriteUbos = spriteUbos;
+			this.animatedTexturesStates = animationStates.build();
+			MemoryUtil.memFree(spriteUboBuffer);
 		}
 
-		this.spriteUbos = spriteUbos;
-		this.sprites = sprites;
-		this.animatedTexturesStates = List.copyOf(animationStates);
 		this.uploadInitialContents();
 		if (SharedConstants.DEBUG_DUMP_TEXTURE_ATLAS) {
 			Path dumpDir = TextureUtil.getDebugTexturePath();
@@ -252,10 +262,13 @@ public class PBRAtlasTexture extends AbstractTexture implements PBRDumpable {
 			);
 			GpuTextureView[] gpuTextureViews = new GpuTextureView[this.mipLevelCount];
 
+			ImmediateState.temporarilyIgnorePass = true;
 			for (int l = 0; l <= this.maxMipLevel; l++) {
 				textureAtlasSprite.uploadFirstFrame(gpuTexture, l);
 				gpuTextureViews[l] = gpuDevice.createTextureView(gpuTexture);
 			}
+
+			ImmediateState.temporarilyIgnorePass = false;
 
 			scratchTextures.add(gpuTextureViews);
 		}
@@ -264,13 +277,15 @@ public class PBRAtlasTexture extends AbstractTexture implements PBRDumpable {
 			for (int level = 0; level < this.mipLevelCount; level++) {
 				try (RenderPass renderPass = RenderSystem.getDevice()
 					.createCommandEncoder()
-					.createRenderPass(() -> "Animate " + this.location, this.mipViews[level], OptionalInt.empty())) {
+					.createRenderPass(() -> "Animate " + this.location, this.mipViews[level], Optional.empty())) {
 					renderPass.setPipeline(RenderPipelines.ANIMATE_SPRITE_BLIT);
+					renderPass.setIndexBuffer(RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS).getBuffer(6), RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS).type());
+					RenderSystem.bindDefaultUniforms(renderPass);
 
 					for (int n = 0; n < staticSprites.size(); n++) {
 						renderPass.bindTexture("Sprite", scratchTextures.get(n)[level], gpuSampler);
-						renderPass.setUniform("SpriteAnimationInfo", gpuBuffer.slice(n * uboBlockSize + level * spriteUboSize, SpriteContents.UBO_SIZE));
-						renderPass.draw(0, 6);
+						renderPass.setUniform("SpriteAnimationInfo", gpuBuffer.slice((long) n * uboBlockSize + (long) level * spriteUboSize, SpriteContents.UBO_SIZE));
+						renderPass.draw(6, 1, 0, 0);
 					}
 				}
 			}
@@ -296,7 +311,9 @@ public class PBRAtlasTexture extends AbstractTexture implements PBRDumpable {
 				for (int i = 0; i <= this.maxMipLevel; i++) {
 					try (RenderPass renderPass = RenderSystem.getDevice()
 						.createCommandEncoder()
-						.createRenderPass(() -> "Animate " + this.location, this.mipViews[i], OptionalInt.empty())) {
+						.createRenderPass(() -> "Animate " + this.location, this.mipViews[i], Optional.empty())) {
+						RenderSystem.bindDefaultUniforms(renderPass);
+
 						for (SpriteContents.AnimationState animationState2 : this.animatedTexturesStates) {
 							if (animationState2.needsToDraw()) {
 								animationState2.drawToAtlas(renderPass, animationState2.getDrawUbo(i));
@@ -309,7 +326,7 @@ public class PBRAtlasTexture extends AbstractTexture implements PBRDumpable {
 	}
 
 	@Override
-	public void close() {
+	public void releaseTextures() {
 		PBRAtlasHolder pbrHolder = ((TextureAtlasExtension) atlasTexture).getPBRHolder();
 		if (pbrHolder != null) {
 			switch (type) {
@@ -322,7 +339,7 @@ public class PBRAtlasTexture extends AbstractTexture implements PBRDumpable {
 			}
 		}
 
-		super.close();
+		super.releaseTextures();
 
 		for (GpuTextureView gpuTextureView : this.mipViews) {
 			gpuTextureView.close();
@@ -336,6 +353,12 @@ public class PBRAtlasTexture extends AbstractTexture implements PBRDumpable {
 			this.spriteUbos.close();
 			this.spriteUbos = null;
 		}
+	}
+
+	@Override
+	public void close() {
+		this.clearTextureData();
+		super.close();
 	}
 
 	@Override

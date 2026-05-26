@@ -13,6 +13,7 @@ import net.minecraft.client.gui.navigation.ScreenDirection;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.resources.language.I18n;
+import net.minecraft.locale.Language;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import org.lwjgl.glfw.GLFW;
@@ -100,6 +101,6 @@ public class LinkElementWidget extends CommentedElementWidget<OptionMenuLinkElem
 	@Override
 	public Optional<Component> getCommentBody() {
 		String translation = "screen." + this.targetScreenId + ".comment";
-		return Optional.ofNullable(I18n.exists(translation) ? Component.translatable(translation) : null);
+		return Optional.ofNullable(Language.getInstance().has(translation) ? Component.translatable(translation) : null);
 	}
 }

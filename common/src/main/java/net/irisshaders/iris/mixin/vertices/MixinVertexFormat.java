@@ -4,6 +4,7 @@ import com.google.common.collect.ImmutableSet;
 import com.mojang.blaze3d.opengl.GlStateManager;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.blaze3d.vertex.VertexFormatElement;
 import net.irisshaders.iris.Iris;
 import net.irisshaders.iris.api.v0.IrisApi;
 import net.irisshaders.iris.pipeline.programs.VertexFormatExtension;
@@ -25,7 +26,7 @@ import java.util.List;
 @Mixin(VertexFormat.class)
 public abstract class MixinVertexFormat implements VertexFormatExtension {
 	@Shadow
-	public abstract List<String> getElementAttributeNames();
+	public abstract List<VertexFormatElement> getElements();
 
 	@Unique
 	private static final ImmutableSet<String> ATTRIBUTE_LIST = ImmutableSet.of("Position", "Color", "Normal", "UV0", "UV1", "UV2", "LineWidth");
@@ -34,7 +35,8 @@ public abstract class MixinVertexFormat implements VertexFormatExtension {
 	public void bindAttributesIris(boolean isFallback, int i) {
 		int j = 0;
 
-		for (String string : this.getElementAttributeNames()) {
+		for (VertexFormatElement x : this.getElements()) {
+			var string = x.name();
 			GlStateManager._glBindAttribLocation(i, j, ATTRIBUTE_LIST.contains(string) && !isFallback ? "iris_" + string : string);
 			j++;
 		}

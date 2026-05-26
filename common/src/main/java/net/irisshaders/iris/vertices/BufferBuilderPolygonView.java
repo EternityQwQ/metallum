@@ -6,34 +6,38 @@ import org.lwjgl.system.MemoryUtil;
 public class BufferBuilderPolygonView implements QuadView {
 	private long[] writeOffsets;
 	private long pointer;
+	private int positionOffset;
+	private int uvOffset;
 
-	public void setup(long pointer, long[] writeOffsets, int stride, int vertexAmount) {
+	public void setup(long pointer, long[] writeOffsets, int positionOffset, int uvOffset) {
 		this.pointer = pointer;
 		this.writeOffsets = writeOffsets;
+		this.positionOffset = positionOffset;
+		this.uvOffset = uvOffset;
 	}
 
 	@Override
 	public float x(int index) {
-		return MemoryAccess.getFloat(pointer + writeOffsets[index]);
+		return MemoryUtil.memGetFloat(pointer + writeOffsets[index] + positionOffset);
 	}
 
 	@Override
 	public float y(int index) {
-		return MemoryAccess.getFloat(pointer + writeOffsets[index] + 4);
+		return MemoryUtil.memGetFloat(pointer + writeOffsets[index] + positionOffset + 4);
 	}
 
 	@Override
 	public float z(int index) {
-		return MemoryAccess.getFloat(pointer + writeOffsets[index] + 8);
+		return MemoryUtil.memGetFloat(pointer + writeOffsets[index] + positionOffset + 8);
 	}
 
 	@Override
 	public float u(int index) {
-		return MemoryAccess.getFloat(pointer + writeOffsets[index] + 16);
+		return MemoryUtil.memGetFloat(pointer + writeOffsets[index] + uvOffset);
 	}
 
 	@Override
 	public float v(int index) {
-		return MemoryAccess.getFloat(pointer + writeOffsets[index] + 20);
+		return MemoryUtil.memGetFloat(pointer + writeOffsets[index] + uvOffset + 4);
 	}
 }

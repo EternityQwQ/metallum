@@ -103,7 +103,10 @@ public abstract class MixinLevelRenderer {
 	@Unique
 	private boolean disableFrustumCulling;
 
-	@WrapOperation(method = "lambda$addLateDebugPass$0", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/CommandEncoder;clearDepthTexture(Lcom/mojang/blaze3d/textures/GpuTexture;D)V"))
+	@Unique
+	private Matrix4f iris$modelMatrix = new Matrix4f();
+
+	@WrapOperation(method = "lambda$addAlwaysOnTopPass$0", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/CommandEncoder;clearDepthTexture(Lcom/mojang/blaze3d/textures/GpuTexture;D)V"))
 	private void skip(CommandEncoder instance, GpuTexture texture, double v, Operation<Void> original) {
 		if (!IrisApi.getInstance().isShaderPackInUse()) {
 			original.call(instance, texture, v);
@@ -116,6 +119,8 @@ public abstract class MixinLevelRenderer {
 	@Inject(method = "render", at = @At("HEAD"))
 	private void iris$setupPipeline(GraphicsResourceAllocator resourceAllocator, DeltaTracker deltaTracker, boolean renderOutline, CameraRenderState cameraState, Matrix4fc modelViewMatrix, GpuBufferSlice terrainFog, Vector4f fogColor, boolean shouldRenderSky, CallbackInfo ci) {
 		DHCompat.checkFrame();
+
+		iris$modelMatrix.set(modelViewMatrix);
 
 		IrisTimeUniforms.updateTime();
 		CapturedRenderingState.INSTANCE.setGbufferModelView(modelViewMatrix);
@@ -191,7 +196,7 @@ public abstract class MixinLevelRenderer {
 	}
 
 	// Do this before main pass submission so shadow maps are ready before terrain draws.
-	@Inject(method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/LevelRenderer;addMainPass(Lcom/mojang/blaze3d/framegraph/FrameGraphBuilder;Lorg/joml/Matrix4fc;Lcom/mojang/blaze3d/buffers/GpuBufferSlice;ZLnet/minecraft/client/renderer/state/level/LevelRenderState;Lnet/minecraft/util/profiling/ProfilerFiller;Lnet/minecraft/client/renderer/chunk/ChunkSectionsToRender;)V"))
+	@Inject(method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/LevelRenderer;addMainPass(Lcom/mojang/blaze3d/framegraph/FrameGraphBuilder;Lnet/minecraft/client/renderer/feature/FeatureRenderDispatcher$PreparedFrame;Lcom/mojang/blaze3d/buffers/GpuBufferSlice;Lnet/minecraft/client/renderer/state/level/LevelRenderState;Lnet/minecraft/util/profiling/ProfilerFiller;Lnet/minecraft/client/renderer/chunk/ChunkSectionsToRender;)V"))
 	private void iris$renderTerrainShadows(GraphicsResourceAllocator resourceAllocator, DeltaTracker deltaTracker, boolean renderOutline, CameraRenderState cameraState, Matrix4fc modelViewMatrix, GpuBufferSlice terrainFog, Vector4f fogColor, boolean shouldRenderSky, CallbackInfo ci) {
 		if (Iris.isPackInUseQuick()) {
 			pipeline.renderShadows((LevelRendererAccessor) this, Minecraft.getInstance().gameRenderer.mainCamera(), this.levelRenderState.cameraRenderState);
@@ -271,10 +276,10 @@ public abstract class MixinLevelRenderer {
 	}
 
 	// TODO this needs to be more consistent.
-	@Inject(method = { MojLambdas.RENDER_MAIN_PASS, NeoLambdas.NEO_RENDER_MAIN_PASS }, require = 1, at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/feature/FeatureRenderDispatcher;renderTranslucentFeatures()V"))
-	private void iris$beginTranslucents(CallbackInfo ci,  @Local(ordinal = 0, argsOnly = true) Matrix4fc modelMatrix) {
+	@Inject(method = { MojLambdas.RENDER_MAIN_PASS, NeoLambdas.NEO_RENDER_MAIN_PASS }, require = 1, at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/feature/FeatureRenderDispatcher$PreparedFrame;executeTranslucent()V"))
+	private void iris$beginTranslucents(CallbackInfo ci,  @Local(ordinal = 0, argsOnly = true) LevelRenderState levelRenderState) {
 		pipeline.beginHand();
-		HandRenderer.INSTANCE.renderSolid(modelMatrix, Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(true), Minecraft.getInstance().gameRenderer.mainCamera(), levelRenderState.cameraRenderState, Minecraft.getInstance().gameRenderer, pipeline);
+		HandRenderer.INSTANCE.renderSolid(this.iris$modelMatrix, Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(true), Minecraft.getInstance().gameRenderer.mainCamera(), levelRenderState.cameraRenderState, Minecraft.getInstance().gameRenderer, pipeline);
 		Profiler.get().popPush("iris_pre_translucent");
 		pipeline.beginTranslucents();
 	}

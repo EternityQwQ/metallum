@@ -3,6 +3,7 @@ package net.irisshaders.iris.shadows;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.mojang.blaze3d.PrimitiveTopology;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.opengl.GlStateManager;
 import com.mojang.blaze3d.systems.RenderPass;
@@ -52,6 +53,7 @@ import org.lwjgl.opengl.GL43C;
 
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 
@@ -193,12 +195,12 @@ public class ShadowCompositeRenderer {
 	}
 
 	public void renderAll() {
-		GpuBuffer indices = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS).getBuffer(6);
-		VertexFormat.IndexType type = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS).type();
+		GpuBuffer indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS).getBuffer(6);
+		com.mojang.blaze3d.IndexType type = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS).type();
 
-		try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> "Shadow composites", Minecraft.getInstance().gameRenderer.mainRenderTarget().getColorTextureView(), OptionalInt.empty())) {
+		try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> "Shadow composites", Minecraft.getInstance().gameRenderer.mainRenderTarget().getColorTextureView(), Optional.empty())) {
 			pass.setPipeline(CompositeRenderer.COMPOSITE_PIPELINE);
-			pass.setVertexBuffer(0, FullScreenQuadRenderer.INSTANCE.getQuad());
+			pass.setVertexBuffer(0, FullScreenQuadRenderer.INSTANCE.getQuad().slice());
 			pass.setIndexBuffer(indices, type);
 
 			for (Pass renderPass : passes) {
@@ -244,7 +246,7 @@ public class ShadowCompositeRenderer {
 
 				this.customUniforms.push(renderPass.program);
 
-				pass.drawIndexed(0, 0, 6, 1);
+				pass.drawIndexed(6, 1, 0, 0, 0);
 			}
 		}
 
@@ -386,7 +388,7 @@ public class ShadowCompositeRenderer {
 				blendModeOverride.apply();
 			} else {
 				BlendModeStorage.restoreBlend();
-				GlStateManager._disableBlend();
+				GlStateManager._disableBlend(0);
 			}
 		}
 	}

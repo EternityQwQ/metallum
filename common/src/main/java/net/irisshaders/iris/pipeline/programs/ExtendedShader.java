@@ -104,16 +104,16 @@ public class ExtendedShader extends GlProgram implements IrisProgram {
 		((ShaderInstanceInterface) this).setShouldSkip(SkipList.NONE);
 
 		boolean has1 = false, has2 = false, has0 = false;
-		if (vertexFormat.contains(VertexFormatElement.UV)) {
+		if (vertexFormat.contains("UV0")) {
 			this.hasUV = true;
 			has0 = true;
 		}
 
-		if (vertexFormat.contains(VertexFormatElement.UV1)) {
+		if (vertexFormat.contains("UV1")) {
 			has1 = true;
 		}
 
-		if (vertexFormat.contains(VertexFormatElement.UV2)) {
+		if (vertexFormat.contains("UV2")) {
 			has2 = true;
 		}
 

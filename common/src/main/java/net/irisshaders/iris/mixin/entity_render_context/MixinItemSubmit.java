@@ -4,10 +4,11 @@ import net.irisshaders.iris.mixinterface.ModelStorage;
 import net.irisshaders.iris.uniforms.CapturedRenderingState;
 import net.irisshaders.iris.vertices.ImmediateState;
 import net.minecraft.client.renderer.SubmitNodeStorage;
+import net.minecraft.client.renderer.feature.ItemFeatureRenderer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 
-@Mixin(SubmitNodeStorage.ItemSubmit.class)
+@Mixin(ItemFeatureRenderer.Submit.class)
 public class MixinItemSubmit implements ModelStorage {
 	@Unique
 	private int entityId, beId, itemId;

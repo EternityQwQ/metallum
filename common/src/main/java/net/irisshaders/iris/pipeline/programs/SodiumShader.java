@@ -1,6 +1,7 @@
 package net.irisshaders.iris.pipeline.programs;
 
 import com.google.common.collect.ImmutableSet;
+import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.opengl.GlBuffer;
 import com.mojang.blaze3d.opengl.GlSampler;
 import com.mojang.blaze3d.opengl.GlStateManager;
@@ -147,7 +148,7 @@ public class SodiumShader implements ChunkShaderInterface {
 	}
 
 	@Override
-	public void setChunkData(net.caffeinemc.mods.sodium.client.gl.buffer.GlBuffer data, int time) {
+	public void setChunkData(GpuBuffer data, int time) {
 		if (uniformChunkData != null) uniformChunkData.bindBuffer(data);
 		if (uniformCurrentTime != null) uniformCurrentTime.set(time);
 	}

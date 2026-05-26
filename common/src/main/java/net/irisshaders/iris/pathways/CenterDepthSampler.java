@@ -1,6 +1,7 @@
 package net.irisshaders.iris.pathways;
 
 import com.google.common.collect.ImmutableSet;
+import com.mojang.blaze3d.PrimitiveTopology;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.opengl.GlStateManager;
 import com.mojang.blaze3d.systems.RenderPass;
@@ -29,6 +30,7 @@ import org.lwjgl.opengl.GL21C;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.function.IntSupplier;
 
@@ -88,15 +90,15 @@ public class CenterDepthSampler {
 
 		hasFirstSample = true;
 
-		GpuBuffer indices = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS).getBuffer(6);
-		VertexFormat.IndexType type = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS).type();
+		GpuBuffer indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS).getBuffer(6);
+		var type = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS).type();
 		BlendModeOverride.restore();
 
-		GlStateManager._disableBlend();
-		try (RenderPass renderPass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> "centerDepthSmooth sampler", Minecraft.getInstance().gameRenderer.mainRenderTarget().getColorTextureView(), OptionalInt.empty())) {
+		GlStateManager._disableBlend(0);
+		try (RenderPass renderPass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> "centerDepthSmooth sampler", Minecraft.getInstance().gameRenderer.mainRenderTarget().getColorTextureView(), Optional.empty())) {
 			renderPass.setPipeline(CompositeRenderer.COMPOSITE_PIPELINE);
 			renderPass.setIndexBuffer(indices, type);
-			renderPass.setVertexBuffer(0, FullScreenQuadRenderer.INSTANCE.getQuad());
+			renderPass.setVertexBuffer(0, FullScreenQuadRenderer.INSTANCE.getQuad().slice());
 
 			renderPass.iris$setCustomPass(EMPTY_STATE);
 
@@ -105,7 +107,7 @@ public class CenterDepthSampler {
 
 			GlStateManager._viewport(0, 0, 1, 1);
 
-			renderPass.drawIndexed(0, 0, 6, 1);
+			renderPass.drawIndexed(6, 1, 0, 0, 0);
 
 			ProgramUniforms.clearActiveUniforms();
 			ProgramSamplers.clearActiveSamplers();

@@ -1,5 +1,6 @@
 package net.irisshaders.iris.mixin;
 
+import com.mojang.blaze3d.opengl.FrameBufferAttachment;
 import com.mojang.blaze3d.opengl.GlConst;
 import com.mojang.blaze3d.opengl.GlDevice;
 import com.mojang.blaze3d.opengl.GlStateManager;
@@ -20,6 +21,8 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+import java.util.List;
 
 /**
  * Allows Iris to detect when the depth texture was re-created, so we can re-attach it
@@ -59,6 +62,7 @@ public class MixinRenderTarget implements Blaze3dRenderTargetExt, RenderTargetIn
 
 	@Override
 	public void iris$bindFramebuffer() {
-		GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, ((GlTexture) this.colorTexture).getFbo((IrisRenderSystem.getGlDevice()).directStateAccess(), this.depthTexture));
+		var fbo = IrisRenderSystem.getGlDevice().frameBufferCache().getFbo(IrisRenderSystem.getGlDevice().directStateAccess(), List.of((FrameBufferAttachment) this.colorTexture), (FrameBufferAttachment) this.depthTexture);
+		GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, fbo);
 	}
 }

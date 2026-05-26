@@ -22,7 +22,7 @@ public class BlendModeStorage {
 	public static void overrideBlend(BlendMode override) {
 		if (!blendLocked) {
 			// Only save the previous state if the blend mode wasn't already locked
-			GlStateManager.BlendState blendState = GlStateManagerAccessor.getBLEND();
+			GlStateManager.BlendState blendState = GlStateManagerAccessor.getBLEND()[0];
 
 			originalBlendEnable = ((BooleanStateAccessor) blendState.mode).isEnabled();
 			originalBlend = new BlendMode(blendState.srcRgb, blendState.dstRgb, blendState.srcAlpha, blendState.dstAlpha);
@@ -31,9 +31,9 @@ public class BlendModeStorage {
 		blendLocked = false;
 
 		if (override == null) {
-			GlStateManager._disableBlend();
+			GlStateManager._disableBlend(0);
 		} else {
-			GlStateManager._enableBlend();
+			GlStateManager._enableBlend(0);
 			GlStateManager._blendFuncSeparate(override.srcRgb(), override.dstRgb(), override.srcAlpha(), override.dstAlpha());
 			blendUnknown = false;
 		}
@@ -44,7 +44,7 @@ public class BlendModeStorage {
 	public static void overrideBufferBlend(int index, BlendMode override) {
 		if (!blendLocked) {
 			// Only save the previous state if the blend mode wasn't already locked
-			GlStateManager.BlendState blendState = GlStateManagerAccessor.getBLEND();
+			GlStateManager.BlendState blendState = GlStateManagerAccessor.getBLEND()[0];
 
 			originalBlendEnable = ((BooleanStateAccessor) blendState.mode).isEnabled();
 			originalBlend = new BlendMode(blendState.srcRgb, blendState.dstRgb, blendState.srcAlpha, blendState.dstAlpha);
@@ -77,9 +77,9 @@ public class BlendModeStorage {
 		blendLocked = false;
 
 		if (originalBlendEnable) {
-			GlStateManager._enableBlend();
+			GlStateManager._enableBlend(0);
 		} else {
-			GlStateManager._disableBlend();
+			GlStateManager._disableBlend(0);
 		}
 
 		GlStateManager._blendFuncSeparate(originalBlend.srcRgb(), originalBlend.dstRgb(),

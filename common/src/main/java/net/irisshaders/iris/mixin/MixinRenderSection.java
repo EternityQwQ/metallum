@@ -14,7 +14,7 @@ public class MixinRenderSection {
 	@Unique
 	private int lastVisibleFrameShadow;
 
-	@Inject(method = "setLastVisibleFrame", at = @At("HEAD"), cancellable = true)
+	//@Inject(method = "setLastVisibleFrame", at = @At("HEAD"), cancellable = true)
 	private void setLastVisibleFrameShadow(int i, CallbackInfo ci) {
 		if (ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
 			ci.cancel();
@@ -22,7 +22,7 @@ public class MixinRenderSection {
 		}
 	}
 
-	@Inject(method = "getLastVisibleFrame", at = @At("HEAD"), cancellable = true)
+	//@Inject(method = "getLastVisibleFrame", at = @At("HEAD"), cancellable = true)
 	private void getLastVisibleFrameShadow(CallbackInfoReturnable<Integer> cir) {
 		if (ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
 			cir.setReturnValue(lastVisibleFrameShadow);

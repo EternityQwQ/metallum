@@ -60,7 +60,7 @@ dependencies {
     addRuntimeFabricModule("fabric-rendering-fluids-v1")
     addRuntimeFabricModule("fabric-resource-loader-v0")
     addRuntimeFabricModule("fabric-lifecycle-events-v1")
-    addRuntimeFabricModule("fabric-renderer-api-v1")
+    //addRuntimeFabricModule("fabric-renderer-api-v1")
 
     implementation(SODIUM_DEPENDENCY_FABRIC)
     implementAndInclude("org.antlr:antlr4-runtime:4.13.1")

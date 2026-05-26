@@ -672,7 +672,7 @@ public class IrisRenderingPipeline implements WorldRenderingPipeline, ShaderRend
 		}
 
 		return createShader(name, key, source.get(), key.getProgram(), key.getAlphaTest(), key.getVertexFormat(), key.getFogMode(),
-			key.isIntensity(), key.shouldIgnoreLightmap(), key.isGlint(), key.isText(), key == ShaderKey.IE_COMPAT);
+			key.isIntensity(), key.shouldIgnoreLightmap(), key.isGlint(), key.isText(), false);
 	}
 
 	@Override
@@ -717,7 +717,7 @@ public class IrisRenderingPipeline implements WorldRenderingPipeline, ShaderRend
 		}
 
 		return createShadowShader(name, key, source.get(), key.getProgram(), key.getAlphaTest(), key.getVertexFormat(),
-			key.isIntensity(), key.shouldIgnoreLightmap(), key.isText(), key == ShaderKey.IE_COMPAT_SHADOW);
+			key.isIntensity(), key.shouldIgnoreLightmap(), key.isText(), false);
 	}
 
 	private ShaderSupplier createFallbackShadowShader(String name, ShaderKey key) throws IOException {

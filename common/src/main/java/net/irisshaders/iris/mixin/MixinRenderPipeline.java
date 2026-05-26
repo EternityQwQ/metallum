@@ -17,21 +17,36 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+import java.util.Objects;
 import java.util.Optional;
 
 @Mixin(RenderPipeline.class)
 public class MixinRenderPipeline {
-	@Inject(method = "getVertexFormat", at = @At("RETURN"), cancellable = true)
+	@Inject(method = "getVertexFormatBinding", at = @At("RETURN"), cancellable = true)
 	private void iris$change(CallbackInfoReturnable<VertexFormat> cir) {
 		if (Iris.isPackInUseQuick() && ImmediateState.isRenderingLevel) {
 			VertexFormat vf = cir.getReturnValue();
 			RenderPipeline thiss = (RenderPipeline) (Object) this;
-			if (vf.equals(DefaultVertexFormat.BLOCK)) {
+			if (Objects.equals(vf, DefaultVertexFormat.BLOCK)) {
 				cir.setReturnValue(IrisVertexFormats.TERRAIN);
-			} else if (vf.equals(DefaultVertexFormat.POSITION_TEX_LIGHTMAP_COLOR)) {
+			} else if (Objects.equals(vf, DefaultVertexFormat.POSITION_TEX_LIGHTMAP_COLOR)) {
 				cir.setReturnValue(IrisVertexFormats.GLYPH);
-			} else if (vf.equals(DefaultVertexFormat.ENTITY)) {
+			} else if (Objects.equals(vf, DefaultVertexFormat.ENTITY)) {
 				cir.setReturnValue(IrisVertexFormats.ENTITY);
+			}
+		}
+	}
+	@Inject(method = "getVertexFormatBindings", at = @At("RETURN"), cancellable = true)
+	private void iris$change2(CallbackInfoReturnable<VertexFormat[]> cir) {
+		if (Iris.isPackInUseQuick() && ImmediateState.isRenderingLevel) {
+			VertexFormat vf = cir.getReturnValue()[0];
+			RenderPipeline thiss = (RenderPipeline) (Object) this;
+			if (Objects.equals(vf, DefaultVertexFormat.BLOCK)) {
+				cir.setReturnValue(new VertexFormat[] { IrisVertexFormats.TERRAIN });
+			} else if (Objects.equals(vf, DefaultVertexFormat.POSITION_TEX_LIGHTMAP_COLOR)) {
+				cir.setReturnValue(new VertexFormat[] { IrisVertexFormats.GLYPH });
+			} else if (Objects.equals(vf, DefaultVertexFormat.ENTITY)) {
+				cir.setReturnValue(new VertexFormat[] { IrisVertexFormats.ENTITY });
 			}
 		}
 	}

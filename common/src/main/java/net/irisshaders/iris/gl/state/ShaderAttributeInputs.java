@@ -22,7 +22,9 @@ public class ShaderAttributeInputs {
 
 		this.newLines = isLines;
 
-		format.getElementAttributeNames().forEach(name -> {
+		format.getElements().forEach(n -> {
+			var name = n.name();
+
 			if ("Color".equals(name)) {
 				color = true;
 			}

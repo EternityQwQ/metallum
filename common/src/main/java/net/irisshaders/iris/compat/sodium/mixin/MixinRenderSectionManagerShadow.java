@@ -2,14 +2,12 @@ package net.irisshaders.iris.compat.sodium.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
-import net.caffeinemc.mods.sodium.client.SodiumClientMod;
 import net.caffeinemc.mods.sodium.client.gl.device.CommandList;
 import net.caffeinemc.mods.sodium.client.render.chunk.RenderSection;
 import net.caffeinemc.mods.sodium.client.render.chunk.RenderSectionManager;
-import net.caffeinemc.mods.sodium.client.render.chunk.TaskQueueType;
 import net.caffeinemc.mods.sodium.client.render.chunk.data.BuiltSectionInfo;
+import net.caffeinemc.mods.sodium.client.render.chunk.lists.DeferredTaskList;
 import net.caffeinemc.mods.sodium.client.render.chunk.lists.SortedRenderLists;
-import net.caffeinemc.mods.sodium.client.render.chunk.lists.TreeSectionCollector;
 import net.caffeinemc.mods.sodium.client.render.chunk.region.RenderRegionManager;
 import net.caffeinemc.mods.sodium.client.render.chunk.translucent_sorting.SortBehavior;
 import net.caffeinemc.mods.sodium.client.render.viewport.Viewport;
@@ -19,7 +17,6 @@ import net.irisshaders.iris.mixinterface.ShadowRenderRegion;
 import net.irisshaders.iris.shadows.ShadowRenderingState;
 import net.minecraft.client.Camera;
 import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.core.SectionPos;
 import org.jetbrains.annotations.NotNull;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -31,43 +28,70 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import java.util.ArrayDeque;
-import java.util.EnumMap;
-import java.util.Map;
-
 @Mixin(RenderSectionManager.class)
 public abstract class MixinRenderSectionManagerShadow implements ShadowRenderListAccess {
 	@Shadow(remap = false)
 	private @NotNull SortedRenderLists renderLists;
-	@Shadow(remap = false)
-	private @NotNull Map<TaskQueueType, ArrayDeque<RenderSection>> taskLists;
-	@Shadow
-	private int lastUpdatedFrame;
 
-	@Shadow
-	protected abstract boolean isOutOfGraph(SectionPos pos);
+	@Shadow(remap = false)
+	private DeferredTaskList taskLists;
+
+	@Shadow(remap = false)
+	private boolean needsRenderListUpdate;
+
+	@Shadow(remap = false)
+	private boolean needsGraphUpdate;
+
+	@Shadow(remap = false)
+	private boolean cameraChanged;
 
 	@Shadow
 	@Final
 	private RenderRegionManager regions;
+
+	@Shadow(remap = false)
+	private void renderOutOfGraph(Viewport viewport, FogParameters fogParameters) {
+		throw new AssertionError();
+	}
+
 	@Unique
 	private @NotNull SortedRenderLists shadowRenderLists = SortedRenderLists.empty();
+
 	@Unique
-	private @NotNull Map<TaskQueueType, ArrayDeque<RenderSection>> shadowTaskLists = new EnumMap<>(TaskQueueType.class);
-	private int lastUpdatedFrameShadow;
+	private DeferredTaskList shadowTaskLists;
 
 	@Unique
 	private boolean shadowNeedsRenderListUpdate = true;
 
 	@Unique
-	private boolean renderListStateIsShadow = false;
+	private boolean renderListStateIsShadow;
+
+	@Unique
+	private boolean regularUboUpdated;
+
+	@Unique
+	private boolean shadowUboUpdated;
+
+	@Unique
+	private SortedRenderLists regularRenderLists;
+
+	@Unique
+	private DeferredTaskList regularTaskLists;
+
+	@Unique
+	private boolean regularNeedsRenderListUpdate;
+
+	@Unique
+	private boolean regularNeedsGraphUpdate;
+
+	@Unique
+	private boolean regularCameraChanged;
+
+	@Unique
+	private boolean shadowScopeActive;
 
 	@Unique
 	private void iris$swapToShadowRenderLists() {
-		if (this.renderListStateIsShadow) {
-			return;
-		}
-
 		for (var region : this.regions.getLoadedRegions()) {
 			((ShadowRenderRegion) region).swapToShadowRenderList();
 		}
@@ -90,74 +114,101 @@ public abstract class MixinRenderSectionManagerShadow implements ShadowRenderLis
 
 	@Override
 	public void iris$beginShadowRenderListScope() {
+		if (!this.shadowScopeActive) {
+			this.regularRenderLists = this.renderLists;
+			this.regularTaskLists = this.taskLists;
+			this.regularNeedsRenderListUpdate = this.needsRenderListUpdate;
+			this.regularNeedsGraphUpdate = this.needsGraphUpdate;
+			this.regularCameraChanged = this.cameraChanged;
+			this.shadowScopeActive = true;
+		}
+
 		this.iris$swapToShadowRenderLists();
+		this.renderLists = this.shadowRenderLists;
+		this.taskLists = this.shadowTaskLists;
 	}
 
 	@Override
 	public void iris$endShadowRenderListScope() {
+		this.shadowRenderLists = this.renderLists;
+		this.shadowTaskLists = this.taskLists;
 		this.iris$swapToRegularRenderLists();
-	}
 
-	@Inject(method = "needsUpdate", at = @At(value = "HEAD"))
-	private void notifyChangedCamera(CallbackInfoReturnable<Boolean> cir) {
-		this.shadowNeedsRenderListUpdate = true;
+		if (this.shadowScopeActive) {
+			this.renderLists = this.regularRenderLists;
+			this.taskLists = this.regularTaskLists;
+			this.needsRenderListUpdate = this.regularNeedsRenderListUpdate;
+			this.needsGraphUpdate = this.regularNeedsGraphUpdate;
+			this.cameraChanged = this.regularCameraChanged;
+			this.shadowScopeActive = false;
+		}
 	}
 
 	@Inject(method = "<init>", at = @At("TAIL"))
 	private void create(ClientLevel level, int renderDistance, SortBehavior sortBehavior, CommandList commandList, CallbackInfo ci) {
-		for (int var6 = 0; var6 < TaskQueueType.values().length; ++var6) {
-			TaskQueueType type = TaskQueueType.values()[var6];
-			shadowTaskLists.put(type, new ArrayDeque<>());
-		}
+		this.shadowTaskLists = null;
 	}
 
-	@Redirect(remap = false, method = "finalizeRenderLists", at = @At(value = "FIELD", target = "Lnet/caffeinemc/mods/sodium/client/render/chunk/RenderSectionManager;renderLists:Lnet/caffeinemc/mods/sodium/client/render/chunk/lists/SortedRenderLists;"))
-	private void useShadowRenderList(RenderSectionManager instance, SortedRenderLists value) {
-		if (ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
-			shadowRenderLists = value;
-		} else {
-			renderLists = value;
-		}
-	}
-
-	@WrapMethod(method = "createTerrainRenderList")
-	private boolean updateShadowRenderLists(Camera camera, Viewport viewport, FogParameters fogParameters, int frame, boolean spectator, Operation<Boolean> original) {
-		if (!ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
-			this.iris$swapToRegularRenderLists();
-		} else {
-			if (this.shadowNeedsRenderListUpdate) {
-				this.iris$swapToShadowRenderLists();
-			}
-		}
-
-		return original.call(camera, viewport, fogParameters, frame, spectator);
-	}
-
-	@Inject(method = "updateSectionInfo", at = @At("HEAD"))
-	private void updateSectionInfo(RenderSection render, BuiltSectionInfo info, CallbackInfoReturnable<Boolean> cir) {
+	@Inject(method = "markGraphDirty", at = @At("HEAD"), remap = false)
+	private void markShadowGraphDirty(CallbackInfo ci) {
 		this.shadowNeedsRenderListUpdate = true;
 	}
 
-	@Inject(method = "onSectionRemoved", at = @At("HEAD"))
+	@Inject(method = "notifyChangedCamera", at = @At("HEAD"), remap = false)
+	private void markShadowCameraDirty(CallbackInfo ci) {
+		this.shadowNeedsRenderListUpdate = true;
+	}
+
+	@Inject(method = "updateSectionInfo", at = @At("HEAD"), remap = false)
+	private void updateSectionInfo(RenderSection render, BuiltSectionInfo info, CallbackInfoReturnable<Integer> cir) {
+		this.shadowNeedsRenderListUpdate = true;
+	}
+
+	@Inject(method = "onSectionRemoved", at = @At("HEAD"), remap = false)
 	private void onSectionRemoved(int x, int y, int z, CallbackInfo ci) {
 		this.shadowNeedsRenderListUpdate = true;
 	}
 
-	@Redirect(remap = false, method = "createTerrainRenderList", at = @At(value = "FIELD", target = "Lnet/caffeinemc/mods/sodium/client/render/chunk/RenderSectionManager;taskLists:Ljava/util/Map;"))
-	private void useShadowTaskrList(RenderSectionManager instance, @NotNull Map<TaskQueueType, ArrayDeque<RenderSection>> value) {
+	@Inject(method = "prepareRenderTrees", at = @At("HEAD"), cancellable = true, remap = false)
+	private void skipAsyncCullDuringShadow(Camera camera, Viewport viewport, FogParameters fogParameters, boolean spectator, CallbackInfo ci) {
 		if (ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
-			shadowTaskLists = value;
-		} else {
-			taskLists = value;
+			ci.cancel();
 		}
 	}
 
-	/**
-	 * Adding a note for myself: This is how the occlusion culling skip for the shadow map is done. Remember this.
-	 */
-	@Redirect(method = "createTerrainRenderList", at = @At(value = "INVOKE", target = "Lnet/caffeinemc/mods/sodium/client/render/chunk/RenderSectionManager;isOutOfGraph(Lnet/minecraft/core/SectionPos;)Z"))
-	private boolean iris$setOutOfGraph(RenderSectionManager instance, SectionPos pos) {
-		return ShadowRenderingState.areShadowsCurrentlyBeingRendered() || this.isOutOfGraph(pos);
+	@Inject(method = "cleanupAndFlip", at = @At("HEAD"), cancellable = true, remap = false)
+	private void skipCleanupAndFlipDuringShadow(CallbackInfo ci) {
+		if (ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
+			ci.cancel();
+		}
+	}
+
+	@Inject(method = "processChunkBuilds", at = @At("HEAD"), cancellable = true, remap = false)
+	private void skipChunkBuildProcessingDuringShadow(Viewport viewport, CallbackInfo ci) {
+		if (ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
+			ci.cancel();
+		}
+	}
+
+	@WrapMethod(method = "finalizeRenderLists", remap = false)
+	private void finalizeShadowRenderLists(Camera camera, Viewport viewport, FogParameters fogParameters, boolean updateChunksImmediately, Operation<Void> original) {
+		if (!ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
+			original.call(camera, viewport, fogParameters, updateChunksImmediately);
+			return;
+		}
+
+		this.iris$swapToShadowRenderLists();
+
+		if (this.shadowNeedsRenderListUpdate) {
+			this.renderOutOfGraph(viewport, fogParameters);
+			this.shadowRenderLists = this.renderLists;
+			this.shadowTaskLists = this.taskLists;
+			this.shadowNeedsRenderListUpdate = false;
+		}
+
+		this.needsRenderListUpdate = false;
+		this.needsGraphUpdate = false;
+		this.cameraChanged = false;
 	}
 
 	@Redirect(method = {
@@ -165,33 +216,7 @@ public abstract class MixinRenderSectionManagerShadow implements ShadowRenderLis
 		"getVisibleChunkCount",
 		"renderLayer"
 	}, at = @At(value = "FIELD", target = "Lnet/caffeinemc/mods/sodium/client/render/chunk/RenderSectionManager;renderLists:Lnet/caffeinemc/mods/sodium/client/render/chunk/lists/SortedRenderLists;"), remap = false)
-	private SortedRenderLists useShadowRenderList2(RenderSectionManager instance) {
-		return ShadowRenderingState.areShadowsCurrentlyBeingRendered() ? shadowRenderLists : renderLists;
-	}
-
-	@Inject(method = "updateChunks", at = @At("HEAD"), cancellable = true, remap = false)
-	private void doNotUpdateDuringShadow(boolean updateImmediately, CallbackInfo ci) {
-		if (ShadowRenderingState.areShadowsCurrentlyBeingRendered()) ci.cancel();
-	}
-
-	@Inject(method = "uploadChunks", at = @At("HEAD"), cancellable = true, remap = false)
-	private void doNotUploadDuringShadow(CallbackInfo ci) {
-		if (ShadowRenderingState.areShadowsCurrentlyBeingRendered()) ci.cancel();
-	}
-
-	@Redirect(method = {
-		"resetRenderLists",
-		"submitSectionTasks(Lnet/caffeinemc/mods/sodium/client/render/chunk/compile/executor/ChunkJobCollector;Lnet/caffeinemc/mods/sodium/client/render/chunk/compile/estimation/UploadResourceBudget;Lnet/caffeinemc/mods/sodium/client/render/chunk/TaskQueueType;)V"
-	}, at = @At(value = "FIELD", target = "Lnet/caffeinemc/mods/sodium/client/render/chunk/RenderSectionManager;taskLists:Ljava/util/Map;"), remap = false)
-	private @NotNull Map<TaskQueueType, ArrayDeque<RenderSection>> useShadowTaskList3(RenderSectionManager instance) {
-		return ShadowRenderingState.areShadowsCurrentlyBeingRendered() ? shadowTaskLists : taskLists;
-	}
-
-	@Redirect(method = {
-		"resetRenderLists"
-	}, at = @At(value = "FIELD", target = "Lnet/caffeinemc/mods/sodium/client/render/chunk/RenderSectionManager;renderLists:Lnet/caffeinemc/mods/sodium/client/render/chunk/lists/SortedRenderLists;"), remap = false)
-	private void useShadowRenderList3(RenderSectionManager instance, SortedRenderLists value) {
-		if (ShadowRenderingState.areShadowsCurrentlyBeingRendered()) shadowRenderLists = value;
-		else renderLists = value;
+	private SortedRenderLists useShadowRenderLists(RenderSectionManager instance) {
+		return ShadowRenderingState.areShadowsCurrentlyBeingRendered() ? this.shadowRenderLists : this.renderLists;
 	}
 }

@@ -15,7 +15,7 @@ public class DepthColorStorage {
 	public static void disableDepthColor() {
 		if (!depthColorLocked) {
 			// Only save the previous state if the depth and color mask wasn't already locked
-			int colorMask = GlStateManagerAccessor.getCOLOR_MASK();
+			int colorMask = GlStateManagerAccessor.getCOLOR_MASK()[0];
 			GlStateManager.DepthState depthState = GlStateManagerAccessor.getDEPTH();
 
 			originalDepthEnable = depthState.mask;

@@ -5,11 +5,21 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormatElement;
 import net.irisshaders.iris.Iris;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 public class IrisVertexFormats {
+	public static final String ENTITY_ATTRIBUTE = "mc_Entity";
+	public static final String ENTITY_ID_ATTRIBUTE = "iris_Entity";
+	public static final String MID_TEXTURE_ATTRIBUTE = "mc_midTexCoord";
+	public static final String TANGENT_ATTRIBUTE = "at_tangent";
+	public static final String MID_BLOCK_ATTRIBUTE = "at_midBlock";
 	public static final VertexFormat TERRAIN;
 	public static final VertexFormat ENTITY;
 	public static final VertexFormat GLYPH;
 	public static final VertexFormat CLOUDS;
+	private static final Map<VertexFormat, Map<String, Integer>> OFFSET_CACHE = new ConcurrentHashMap<>();
 
 	static {
 		//ENTITY_ELEMENT = VertexFormatElement.register(getNextVertexFormatElementId(), 0, GpuFormat.RG16_SINT);
@@ -24,10 +34,10 @@ public class IrisVertexFormats {
 			.addAttribute("UV0", GpuFormat.RG32_FLOAT)
 			.addAttribute("UV2", GpuFormat.RG16_SINT)
 			.addAttribute("Normal", GpuFormat.RGBA8_SNORM)
-			.addAttribute("mc_Entity", GpuFormat.RG16_SINT)
-			.addAttribute("mc_midTexCoord", GpuFormat.RG32_FLOAT)
-			.addAttribute("at_tangent", GpuFormat.RGBA8_SNORM)
-			.addAttribute("at_midBlock", GpuFormat.RGB8_SINT)
+			.addAttribute(ENTITY_ATTRIBUTE, GpuFormat.RG16_SINT)
+			.addAttribute(MID_TEXTURE_ATTRIBUTE, GpuFormat.RG32_FLOAT)
+			.addAttribute(TANGENT_ATTRIBUTE, GpuFormat.RGBA8_SNORM)
+			.addAttribute(MID_BLOCK_ATTRIBUTE, 4, GpuFormat.RGB8_SINT)
 			.build();
 
 		ENTITY = VertexFormat.builder(0)
@@ -37,20 +47,20 @@ public class IrisVertexFormats {
 			.addAttribute("UV1", GpuFormat.RG16_SINT)
 			.addAttribute("UV2", GpuFormat.RG16_SINT)
 			.addAttribute("Normal", GpuFormat.RGBA8_SNORM)
-			.addAttribute("iris_Entity", GpuFormat.RGBA16_UINT)
-			.addAttribute("mc_midTexCoord", GpuFormat.RG32_FLOAT)
-			.addAttribute("at_tangent", GpuFormat.RGBA8_SNORM)
+			.addAttribute(ENTITY_ID_ATTRIBUTE, GpuFormat.RGBA16_UINT)
+			.addAttribute(MID_TEXTURE_ATTRIBUTE, GpuFormat.RG32_FLOAT)
+			.addAttribute(TANGENT_ATTRIBUTE, GpuFormat.RGBA8_SNORM)
 			.build();
 
 		GLYPH = VertexFormat.builder(0)
 			.addAttribute("Position", GpuFormat.RGB32_FLOAT)
+			.addAttribute("Color", GpuFormat.RGBA8_UNORM)
 			.addAttribute("UV0", GpuFormat.RG32_FLOAT)
 			.addAttribute("UV2", GpuFormat.RG16_SINT)
-			.addAttribute("Color", GpuFormat.RGBA8_UNORM)
 			.addAttribute("Normal", GpuFormat.RGBA8_SNORM)
-			.addAttribute("iris_Entity", GpuFormat.RGBA16_UINT)
-			.addAttribute("mc_midTexCoord", GpuFormat.RG32_FLOAT)
-			.addAttribute("at_tangent", GpuFormat.RGBA8_SNORM)
+			.addAttribute(ENTITY_ID_ATTRIBUTE, GpuFormat.RGBA16_UINT)
+			.addAttribute(MID_TEXTURE_ATTRIBUTE, GpuFormat.RG32_FLOAT)
+			.addAttribute(TANGENT_ATTRIBUTE, GpuFormat.RGBA8_SNORM)
 			.build();
 
 		CLOUDS = VertexFormat.builder(0)
@@ -67,5 +77,19 @@ public class IrisVertexFormats {
 			Iris.logger.info(element.name() + " @ " + byteIndex + " is " + element.format());
 			byteIndex += element.format().pixelSize();
 		}
+	}
+
+	public static int getOffset(VertexFormat format, String attributeName) {
+		Integer offset = OFFSET_CACHE.computeIfAbsent(format, IrisVertexFormats::createOffsetMap).get(attributeName);
+		return offset != null ? offset : -1;
+	}
+
+	private static Map<String, Integer> createOffsetMap(VertexFormat format) {
+		Map<String, Integer> offsets = new HashMap<>();
+		for (VertexFormatElement element : format.getElements()) {
+			offsets.put(element.name(), element.offset());
+		}
+
+		return Map.copyOf(offsets);
 	}
 }

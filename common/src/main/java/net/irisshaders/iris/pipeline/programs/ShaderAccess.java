@@ -13,13 +13,7 @@ import net.minecraft.client.renderer.ShaderDefines;
 import net.minecraft.resources.Identifier;
 
 public class ShaderAccess {
-	public static final VertexFormat IE_FORMAT = VertexFormat.builder()
-		.add("Position", VertexFormatElement.POSITION)
-		.add("Color", VertexFormatElement.COLOR)
-		.add("UV0", VertexFormatElement.UV0)
-		.add("Normal", VertexFormatElement.NORMAL)
-		.padding(1)
-		.build();
+
 
 	// TODO SPS 1.21.2
 }

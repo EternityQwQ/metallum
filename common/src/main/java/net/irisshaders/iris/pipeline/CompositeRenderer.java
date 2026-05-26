@@ -3,6 +3,7 @@ package net.irisshaders.iris.pipeline;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.mojang.blaze3d.PrimitiveTopology;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.opengl.GlBuffer;
 import com.mojang.blaze3d.opengl.GlConst;
@@ -78,7 +79,8 @@ public class CompositeRenderer {
 		.withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
 		.withColorTargetState(ColorTargetState.DEFAULT)
 		.withLocation(Identifier.fromNamespaceAndPath("iris", "composite")).withVertexShader("core/screenquad").withFragmentShader("core/blit_screen")
-		.withVertexFormat(DefaultVertexFormat.POSITION_TEX, VertexFormat.Mode.QUADS)
+		.withVertexBinding(0, DefaultVertexFormat.POSITION_TEX)
+		.withPrimitiveTopology(PrimitiveTopology.QUADS)
 		.build();
 
 	private final RenderTargets renderTargets;
@@ -274,8 +276,8 @@ public class CompositeRenderer {
 
 		com.mojang.blaze3d.pipeline.RenderTarget main = Minecraft.getInstance().gameRenderer.mainRenderTarget();
 
-		GpuBuffer indices = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS).getBuffer(6);
-		VertexFormat.IndexType type = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS).type();
+		GpuBuffer indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS).getBuffer(6);
+		var type = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS).type();
 
 		FullScreenQuadRenderer.INSTANCE.bind();
 
@@ -512,7 +514,7 @@ public class CompositeRenderer {
 				blendModeOverride.apply();
 			} else {
 				BlendModeStorage.restoreBlend();
-				GlStateManager._disableBlend();
+				GlStateManager._disableBlend(0);
 			}
 		}
 	}

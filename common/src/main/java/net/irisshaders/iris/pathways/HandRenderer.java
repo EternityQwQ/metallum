@@ -8,13 +8,13 @@ import com.mojang.blaze3d.vertex.VertexSorting;
 import net.caffeinemc.mods.sodium.client.util.GameRendererStorage;
 import net.irisshaders.iris.Iris;
 import net.irisshaders.iris.mixin.GameRendererAccessor;
+import net.irisshaders.iris.pbr.texture.PBRAtlasTexture;
 import net.irisshaders.iris.pipeline.WorldRenderingPhase;
 import net.irisshaders.iris.pipeline.WorldRenderingPipeline;
 import net.irisshaders.iris.uniforms.CapturedRenderingState;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
-import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.Projection;
 import net.minecraft.client.renderer.ProjectionMatrixBuffer;
 import net.minecraft.client.renderer.RenderBuffers;
@@ -48,10 +48,11 @@ public class HandRenderer {
 	private SubmitNodeStorage submitNodeCollector;
 	private FeatureRenderDispatcher featureRenderDispatcher;
 	private Projection projection = new Projection();
+	private FeatureRenderDispatcher.PreparedFrame frame;
 
 	public HandRenderer() {
 		submitNodeCollector = new SubmitNodeStorage();
-		featureRenderDispatcher = new FeatureRenderDispatcher(submitNodeCollector, Minecraft.getInstance().getModelManager(), bufferSource.bufferSource(), Minecraft.getInstance().getAtlasManager(), bufferSource.outlineBufferSource(), bufferSource.crumblingBufferSource(), Minecraft.getInstance().font, Minecraft.getInstance().gameRenderer.gameRenderState());
+		featureRenderDispatcher = new FeatureRenderDispatcher(bufferSource, Minecraft.getInstance().getModelManager(), Minecraft.getInstance().getAtlasManager(), Minecraft.getInstance().font, Minecraft.getInstance().gameRenderer.gameRenderState());
 	}
 
 	private PoseStack setupGlState(GameRenderer gameRenderer, CameraRenderState camera, Matrix4fc modelMatrix, float tickDelta) {
@@ -115,6 +116,7 @@ public class HandRenderer {
 		RenderSystem.getModelViewStack().set(poseStack.last().pose());
 
 		gameRenderer.itemInHandRenderer.iris$renderHandsWithCustomRenderer(this, tickDelta, new PoseStack(), this.submitNodeCollector, Minecraft.getInstance().player, Minecraft.getInstance().getEntityRenderDispatcher().getPackedLightCoords(camera.entity(), tickDelta));
+		featureRenderDispatcher.renderAllFeatures(submitNodeCollector);
 
 		Profiler.get().pop();
 
@@ -122,7 +124,6 @@ public class HandRenderer {
 
 		poseStack.popPose();
 		RenderSystem.getModelViewStack().popMatrix();
-
 		renderingSolid = false;
 
 		pipeline.setPhase(WorldRenderingPhase.NONE);
@@ -131,10 +132,8 @@ public class HandRenderer {
 	}
 
 	public void renderTranslucent(Matrix4fc modelMatrix, float tickDelta, Camera camera, CameraRenderState cameraState, GameRenderer gameRenderer, WorldRenderingPipeline pipeline) {
-		if (!canRender(camera, gameRenderer) || !gameRenderer.itemInHandRenderer.iris$isAnyHandTranslucent() || !Iris.isPackInUseQuick()) {
-			submitNodeCollector.endFrame();
-			bufferSource.bufferSource().endFrame();
-
+		if (!canRender(camera, gameRenderer) || !Iris.isPackInUseQuick()) {
+			bufferSource.endFrame();
 			return;
 		}
 
@@ -154,18 +153,19 @@ public class HandRenderer {
 		RenderSystem.getModelViewStack().set(poseStack.last().pose());
 
 		gameRenderer.itemInHandRenderer.iris$renderHandsWithCustomRenderer(this, tickDelta, new PoseStack(), submitNodeCollector, Minecraft.getInstance().player, Minecraft.getInstance().getEntityRenderDispatcher().getPackedLightCoords(camera.entity(), tickDelta));
+		featureRenderDispatcher.renderAllFeatures(submitNodeCollector);
 
 		poseStack.popPose();
 
 		Profiler.get().pop();
-		submitNodeCollector.endFrame();
-		bufferSource.bufferSource().endFrame();
+		bufferSource.endFrame();
 
 		RenderSystem.restoreProjectionMatrix();
 
 		RenderSystem.getModelViewStack().popMatrix();
 
 		pipeline.setPhase(WorldRenderingPhase.NONE);
+
 
 		ACTIVE = false;
 	}
@@ -183,6 +183,5 @@ public class HandRenderer {
 	}
 
 	public void endRender() {
-		featureRenderDispatcher.renderAllFeatures();
 	}
 }

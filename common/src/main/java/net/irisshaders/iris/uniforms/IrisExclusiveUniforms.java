@@ -12,6 +12,7 @@ import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Vec3i;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.attribute.EnvironmentAttributes;
@@ -197,7 +198,7 @@ public class IrisExclusiveUniforms {
 		HitResult hitResult = Minecraft.getInstance().hitResult;
 		if (Minecraft.getInstance().level != null && ((GameRendererAccessor) Minecraft.getInstance().gameRenderer).shouldRenderBlockOutlineA() && hitResult != null && hitResult.getType() == HitResult.Type.BLOCK) {
 			BlockPos blockPos4 = ((BlockHitResult) hitResult).getBlockPos();
-			return blockPos4.getCenter().subtract(Minecraft.getInstance().gameRenderer.mainCamera().position()).toVector3f();
+			return new Vec3((double) blockPos4.getX() + 0.5, (double) blockPos4.getY() + 0.5, (double) blockPos4.getZ() + 0.5).subtract(Minecraft.getInstance().gameRenderer.mainCamera().position()).toVector3f();
 		}
 
 		return new Vector3f(-256.0f);

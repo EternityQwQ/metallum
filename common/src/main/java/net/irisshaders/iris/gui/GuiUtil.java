@@ -11,6 +11,7 @@ import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.resources.language.I18n;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
+import net.minecraft.locale.Language;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.Identifier;
@@ -141,7 +142,7 @@ public final class GuiUtil {
 	 * @return the translated text if found, otherwise the default provided
 	 */
 	public static MutableComponent translateOrDefault(MutableComponent defaultText, String translationDesc, Object... format) {
-		if (I18n.exists(translationDesc)) {
+		if (Language.getInstance().has(translationDesc)) {
 			return Component.translatable(translationDesc, format);
 		}
 		return defaultText;

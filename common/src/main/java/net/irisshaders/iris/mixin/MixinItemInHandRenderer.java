@@ -10,7 +10,6 @@ import net.irisshaders.iris.pathways.HandRenderer;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.ItemInHandRenderer;
-import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.SubmitNodeStorage;
 import net.minecraft.client.renderer.feature.FeatureRenderDispatcher;
@@ -26,10 +25,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(ItemInHandRenderer.class)
 public abstract class MixinItemInHandRenderer implements ItemInHandInterface {
-	@Shadow
-	public abstract void renderHandsWithItems(float f, PoseStack poseStack, SubmitNodeCollector submitNodeCollector, LocalPlayer localPlayer, int i);
 
-	@Inject(method = "renderArmWithItem", at = @At("HEAD"), cancellable = true)
+	@Inject(method = "submitArmWithItem", at = @At("HEAD"), cancellable = true)
 	private void iris$skipTranslucentHands(AbstractClientPlayer abstractClientPlayer, float f, float g, InteractionHand interactionHand, float h, ItemStack itemStack, float i, PoseStack poseStack, SubmitNodeCollector submitNodeCollector, int j, CallbackInfo ci) {
 		if (Iris.isPackInUseQuick()) {
 			if (HandRenderer.INSTANCE.isRenderingSolid() == HandRenderer.INSTANCE.isHandTranslucent(itemStack)) {
@@ -44,17 +41,15 @@ public abstract class MixinItemInHandRenderer implements ItemInHandInterface {
 	@Override
 	public void iris$renderHandsWithCustomRenderer(HandRenderer handRenderer, float tickDelta, PoseStack poseStack, SubmitNodeStorage submitNodeCollector, @Nullable LocalPlayer player, int packedLightCoords) {
 		customRenderer = handRenderer;
-		this.renderHandsWithItems(tickDelta, poseStack, submitNodeCollector, player, packedLightCoords);
+		this.submitHandsWithItems(tickDelta, poseStack, submitNodeCollector, player, packedLightCoords);
 		customRenderer = null;
 	}
 
 
-	@WrapOperation(method = "renderHandsWithItems", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/feature/FeatureRenderDispatcher;renderAllFeatures()V"))
-	private void iris$wrapHand2(FeatureRenderDispatcher instance, Operation<Void> original) {
+	@Inject(method = "submitHandsWithItems", at = @At(value = "RETURN"))
+	private void iris$wrapHand2(float frameInterp, PoseStack poseStack, SubmitNodeCollector submitNodeCollector, LocalPlayer player, int lightCoords, CallbackInfo ci) {
 		if (customRenderer != null) {
 			customRenderer.endRender();
-		} else {
-			original.call(instance);
 		}
 	}
 
@@ -62,6 +57,9 @@ public abstract class MixinItemInHandRenderer implements ItemInHandInterface {
 	private ItemStack mainHandItem;
 	@Shadow
 	private ItemStack offHandItem;
+
+	@Shadow
+	public abstract void submitHandsWithItems(float frameInterp, PoseStack poseStack, SubmitNodeCollector submitNodeCollector, LocalPlayer player, int lightCoords);
 
 	@Override
 	public boolean iris$isAnyHandTranslucent () {

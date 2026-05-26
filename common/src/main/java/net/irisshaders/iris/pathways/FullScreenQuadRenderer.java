@@ -1,6 +1,8 @@
 package net.irisshaders.iris.pathways;
 
+import com.mojang.blaze3d.PrimitiveTopology;
 import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.opengl.GlBuffer;
 import com.mojang.blaze3d.opengl.GlDevice;
 import com.mojang.blaze3d.opengl.GlStateManager;
@@ -26,7 +28,7 @@ public class FullScreenQuadRenderer {
 
 	private FullScreenQuadRenderer() {
 		var x = new ByteBufferBuilder(64);
-		BufferBuilder bufferBuilder = new BufferBuilder(x, VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
+		BufferBuilder bufferBuilder = new BufferBuilder(x, PrimitiveTopology.QUADS, DefaultVertexFormat.POSITION_TEX);
 		bufferBuilder.addVertex(0.0F, 0.0F, 0.0F).setUv(0.0F, 0.0F);
 		bufferBuilder.addVertex(1.0F, 0.0F, 0.0F).setUv(1.0F, 0.0F);
 		bufferBuilder.addVertex(1.0F, 1.0F, 0.0F).setUv(1.0F, 1.0F);
@@ -47,6 +49,6 @@ public class FullScreenQuadRenderer {
 	}
 
 	public void bind() {
-		((GlDevice) ((GpuDeviceAccessor) RenderSystem.getDevice()).getBackend()).vertexArrayCache().bindVertexArray(DefaultVertexFormat.POSITION_TEX, (GlBuffer) quad);
+		((GlDevice) ((GpuDeviceAccessor) RenderSystem.getDevice()).getBackend()).vertexArrayCache().bindVertexArray(new VertexFormat[] { DefaultVertexFormat.POSITION_TEX }, new GpuBufferSlice[] { quad.slice() }, null);
 	}
 }

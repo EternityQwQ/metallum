@@ -1,12 +1,13 @@
 package net.irisshaders.iris.mixin.entity_render_context;
 
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.irisshaders.iris.shaderpack.materialmap.NamespacedId;
 import net.irisshaders.iris.shaderpack.materialmap.WorldRenderingSettings;
 import net.irisshaders.iris.uniforms.CapturedRenderingState;
-import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.SubmitNodeCollection;
 import net.minecraft.client.renderer.SubmitNodeStorage;
 import net.minecraft.client.renderer.feature.FlameFeatureRenderer;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.model.sprite.AtlasManager;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -19,15 +20,15 @@ public class MixinFlameFeatureRenderer {
 	@Unique
 	private static final NamespacedId flameId = new NamespacedId("minecraft", "entity_flame");
 
-	@Inject(method = "renderSolid", at = @At("HEAD"))
-	private void iris$setFlame(SubmitNodeCollection nodeCollection, MultiBufferSource.BufferSource bufferSource, AtlasManager atlasManager, CallbackInfo ci) {
+	@Inject(method = "prepare", at = @At("HEAD"))
+	private void iris$setFlame(FlameFeatureRenderer.Submit submit, VertexConsumer buffer, TextureAtlasSprite fire1, TextureAtlasSprite fire2, CallbackInfo ci) {
 		if (WorldRenderingSettings.INSTANCE.getEntityIds() != null) {
 			CapturedRenderingState.INSTANCE.setCurrentEntity(WorldRenderingSettings.INSTANCE.getEntityIds().applyAsInt(flameId));
 		}
 	}
 
-	@Inject(method = "renderSolid", at = @At("RETURN"))
-	private void iris$setFlame2(SubmitNodeCollection submitNodeCollection, MultiBufferSource.BufferSource bufferSource, AtlasManager atlasManager, CallbackInfo ci) {
+	@Inject(method = "prepare", at = @At("RETURN"))
+	private void iris$setFlame2(FlameFeatureRenderer.Submit submit, VertexConsumer buffer, TextureAtlasSprite fire1, TextureAtlasSprite fire2, CallbackInfo ci) {
 		CapturedRenderingState.INSTANCE.setCurrentEntity(0);
 
 	}

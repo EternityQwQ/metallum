@@ -14,6 +14,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.resources.language.I18n;
+import net.minecraft.locale.Language;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.TextColor;
@@ -162,7 +163,7 @@ public abstract class BaseOptionElementWidget<T extends OptionMenuElement> exten
 
 	@Override
 	public Optional<Component> getCommentBody() {
-		return Optional.ofNullable(getCommentKey()).map(key -> I18n.exists(key) ? Component.translatable(key) : null);
+		return Optional.ofNullable(getCommentKey()).map(key -> Language.getInstance().has(key) ? Component.translatable(key) : null);
 	}
 
 	@Override

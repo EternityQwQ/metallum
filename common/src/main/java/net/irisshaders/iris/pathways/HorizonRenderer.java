@@ -1,5 +1,6 @@
 package net.irisshaders.iris.pathways;
 
+import com.mojang.blaze3d.PrimitiveTopology;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.systems.RenderPass;
@@ -17,6 +18,7 @@ import org.joml.Matrix4fc;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
 
+import java.util.Optional;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
 
@@ -60,7 +62,7 @@ public class HorizonRenderer {
 			this.buffer.close();
 		}
 
-		BufferBuilder buffer = new BufferBuilder(storage, VertexFormat.Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION);
+		BufferBuilder buffer = new BufferBuilder(storage, PrimitiveTopology.TRIANGLE_FAN, DefaultVertexFormat.POSITION);
 
 		buildHorizon(currentRenderDistance * 16, buffer);
 		MeshData meshData = buffer.buildOrThrow();
@@ -94,18 +96,18 @@ public class HorizonRenderer {
 			rebuildBuffer();
 		}
 
-		RenderSystem.AutoStorageIndexBuffer indices = RenderSystem.getSequentialBuffer(VertexFormat.Mode.TRIANGLE_FAN);
+		RenderSystem.AutoStorageIndexBuffer indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.TRIANGLE_FAN);
 		GpuBuffer indexBuffer = indices.getBuffer(indexCount);
 		GpuBufferSlice gpuBufferSlice = RenderSystem.getDynamicUniforms().writeTransform((Matrix4f) modelView, fogColor, new Vector3f(), new Matrix4f());
-		try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> "Sky", Minecraft.getInstance().gameRenderer.mainRenderTarget().getColorTextureView(), OptionalInt.empty(),
+		try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> "Sky", Minecraft.getInstance().gameRenderer.mainRenderTarget().getColorTextureView(), Optional.empty(),
 			Minecraft.getInstance().gameRenderer.mainRenderTarget().getDepthTextureView(), OptionalDouble.empty())) {
 			RenderSystem.bindDefaultUniforms(pass);
 			pass.setUniform("DynamicTransforms", gpuBufferSlice);
 
-			pass.setVertexBuffer(0, buffer);
+			pass.setVertexBuffer(0, buffer.slice());
 			pass.setIndexBuffer(indexBuffer, indices.type());
 			pass.setPipeline(RenderPipelines.SKY);
-			pass.drawIndexed(0, 0, indexCount, 1);
+			pass.drawIndexed(indexCount, 1, 0, 0, 0);
 		}
 	}
 

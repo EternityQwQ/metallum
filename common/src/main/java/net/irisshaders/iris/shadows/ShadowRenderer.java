@@ -177,7 +177,7 @@ public class ShadowRenderer {
 
 		levelRenderState = new LevelRenderState();
 		submitNodeStorage = new SubmitNodeStorage();
-		featureRenderDispatcher = new FeatureRenderDispatcher(submitNodeStorage, Minecraft.getInstance().getModelManager(), buffers.bufferSource(), Minecraft.getInstance().getAtlasManager(), buffers.outlineBufferSource(), buffers.crumblingBufferSource(), Minecraft.getInstance().font, Minecraft.getInstance().gameRenderer.gameRenderState());
+		featureRenderDispatcher = new FeatureRenderDispatcher(buffers, Minecraft.getInstance().getModelManager(), Minecraft.getInstance().getAtlasManager(), Minecraft.getInstance().font, Minecraft.getInstance().gameRenderer.gameRenderState());
 	}
 
 	public static PoseStack createShadowModelView(float sunPathRotation, float intervalSize, float nearPlane, float farPlane) {
@@ -413,6 +413,7 @@ public class ShadowRenderer {
 		// Create our camera
 		PoseStack modelView = createShadowModelView(this.sunPathRotation, this.intervalSize, nearPlane, farPlane);
 		MODELVIEW = new Matrix4f(modelView.last().pose());
+		Matrix4f x = new Matrix4f(levelRenderState.cameraRenderState.viewRotationMatrix);
 		levelRenderState.cameraRenderState.viewRotationMatrix = MODELVIEW;
 
 		RenderSystem.getModelViewStack().pushMatrix();
@@ -570,11 +571,10 @@ public class ShadowRenderer {
 			// Note: We must use a separate BuilderBufferStorage object here, or else very weird things will happen during
 			// rendering.
 
-			MultiBufferSource.BufferSource bufferSource = buffers.bufferSource();
 			EntityRenderDispatcher dispatcher = levelRenderer.getEntityRenderDispatcher();
 			RenderSystem.getModelViewStack().identity();
 
-			renderedShadowEntities = renderEntities(levelRenderer, dispatcher, bufferSource, modelView, tickDelta, entityShadowFrustum, cameraX, cameraY, cameraZ);
+			renderedShadowEntities = renderEntities(levelRenderer, dispatcher, modelView, tickDelta, entityShadowFrustum, cameraX, cameraY, cameraZ);
 
 			profiler.popPush("build blockentities");
 
@@ -586,9 +586,9 @@ public class ShadowRenderer {
 
 			profiler.popPush("draw entities");
 
-			featureRenderDispatcher.renderAllFeatures();
+			featureRenderDispatcher.renderAllFeatures(submitNodeStorage);
 
-			bufferSource.endFrame();
+			buffers.endFrame();
 
 			copyPreTranslucentDepth(levelRenderer);
 
@@ -643,6 +643,8 @@ public class ShadowRenderer {
 		visibleBlockEntities = null;
 		ACTIVE = false;
 
+		levelRenderState.cameraRenderState.viewRotationMatrix = x;
+
 		RenderSystem.getModelViewStack().popMatrix();
 
 		profiler.pop();
@@ -683,7 +685,7 @@ public class ShadowRenderer {
 		}
 	}
 
-	private int renderEntities(LevelRendererAccessor levelRenderer, EntityRenderDispatcher dispatcher, MultiBufferSource.BufferSource bufferSource, PoseStack modelView, float tickDelta, Frustum frustum, double cameraX, double cameraY, double cameraZ) {
+	private int renderEntities(LevelRendererAccessor levelRenderer, EntityRenderDispatcher dispatcher, PoseStack modelView, float tickDelta, Frustum frustum, double cameraX, double cameraY, double cameraZ) {
 		Profiler.get().push("cull");
 
 		for (EntityRenderState entityRenderState : levelRenderState.entityRenderStates) {
@@ -723,7 +725,7 @@ public class ShadowRenderer {
 		}
 
 	}
-	private int renderPlayerEntity(LevelRendererAccessor levelRenderer, EntityRenderDispatcher dispatcher, MultiBufferSource.BufferSource bufferSource, PoseStack modelView, float tickDelta, Frustum frustum, double cameraX, double cameraY, double cameraZ) {
+	private int renderPlayerEntity(LevelRendererAccessor levelRenderer, EntityRenderDispatcher dispatcher, PoseStack modelView, float tickDelta, Frustum frustum, double cameraX, double cameraY, double cameraZ) {
 		Profiler.get().push("cull");
 
 		Entity player = Minecraft.getInstance().player;
