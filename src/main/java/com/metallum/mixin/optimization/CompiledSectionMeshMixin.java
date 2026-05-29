@@ -9,8 +9,6 @@ import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.client.renderer.chunk.CompiledSectionMesh;
 import net.minecraft.client.renderer.chunk.SectionCompiler;
 import net.minecraft.client.renderer.chunk.TranslucencyPointOfView;
-import net.minecraft.core.BlockPos;
-import org.jspecify.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -23,12 +21,7 @@ import java.util.Map;
 @Mixin(CompiledSectionMesh.class)
 public abstract class CompiledSectionMeshMixin implements MetalTerrainFaceCulling.SectionMeshSegments {
     @Unique
-    private MetalTerrainFaceCulling.FaceSegments metallum$terrainFaceSegments;
-    @Unique
-    private MetalTerrainFaceCulling.FaceSegments metallum$cutoutTerrainFaceSegments;
-    @Unique
-    @Nullable
-    private BlockPos metallum$terrainSectionOrigin;
+    private final MetalTerrainFaceCulling.SectionSegments metallum$segments = new MetalTerrainFaceCulling.SectionSegments();
 
     @Inject(method = "<init>", at = @At("RETURN"))
     private void metallum$copyTerrainFaceSegments(
@@ -39,41 +32,16 @@ public abstract class CompiledSectionMeshMixin implements MetalTerrainFaceCullin
         Map<ChunkSectionLayer, MeshData> renderedLayers = ((SectionCompilerResultsAccessor) (Object) results).metallum$getRenderedLayers();
         MeshData solidMesh = renderedLayers.get(ChunkSectionLayer.SOLID);
         if (solidMesh instanceof MetalTerrainFaceCulling.MeshDataSegments segmentsHolder) {
-            this.metallum$terrainFaceSegments = segmentsHolder.metallum$getTerrainFaceSegments();
+            this.metallum$segments.solid = segmentsHolder.metallum$getTerrainFaceSegments();
         }
         MeshData cutoutMesh = renderedLayers.get(ChunkSectionLayer.CUTOUT);
         if (cutoutMesh instanceof MetalTerrainFaceCulling.MeshDataSegments segmentsHolder) {
-            this.metallum$cutoutTerrainFaceSegments = segmentsHolder.metallum$getTerrainFaceSegments();
+            this.metallum$segments.cutout = segmentsHolder.metallum$getTerrainFaceSegments();
         }
     }
 
     @Override
-    public MetalTerrainFaceCulling.FaceSegments metallum$getTerrainFaceSegments() {
-        return this.metallum$terrainFaceSegments;
-    }
-
-    @Override
-    public void metallum$setTerrainFaceSegments(final MetalTerrainFaceCulling.FaceSegments segments) {
-        this.metallum$terrainFaceSegments = segments;
-    }
-
-    @Override
-    public MetalTerrainFaceCulling.FaceSegments metallum$getCutoutTerrainFaceSegments() {
-        return this.metallum$cutoutTerrainFaceSegments;
-    }
-
-    @Override
-    public void metallum$setCutoutTerrainFaceSegments(final MetalTerrainFaceCulling.FaceSegments segments) {
-        this.metallum$cutoutTerrainFaceSegments = segments;
-    }
-
-    @Override
-    public BlockPos metallum$getTerrainSectionOrigin() {
-        return this.metallum$terrainSectionOrigin;
-    }
-
-    @Override
-    public void metallum$setTerrainSectionOrigin(final BlockPos origin) {
-        this.metallum$terrainSectionOrigin = origin;
+    public MetalTerrainFaceCulling.SectionSegments metallum$getSegments() {
+        return this.metallum$segments;
     }
 }

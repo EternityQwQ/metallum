@@ -37,10 +37,6 @@ public class MetalBackend implements GpuBackend {
     public @NonNull GpuDevice createDevice(
             final long window, final @NonNull ShaderSource defaultShaderSource, final @NonNull GpuDebugOptions debugOptions, final @NonNull Runnable criticalShaderLoader
     ) throws BackendCreationException {
-        if (!MetalNativeBridge.isMacOs()) {
-            throw new BackendCreationException("Metal is only available on macOS", BackendCreationException.Reason.OTHER);
-        }
-
         MemorySegment deviceHandle;
         MemorySegment cocoaWindow;
         MemorySegment cocoaView;

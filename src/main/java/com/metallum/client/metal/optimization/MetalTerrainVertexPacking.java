@@ -52,36 +52,26 @@ public final class MetalTerrainVertexPacking {
             DST_UV2
     };
 
-    private static volatile boolean enabled;
-
     private MetalTerrainVertexPacking() {
     }
 
-    public static void setEnabled(final boolean enabled) {
-        MetalTerrainVertexPacking.enabled = enabled;
-    }
-
     public static boolean isPackedTerrainPipeline(final String pipelineLocation) {
-        return enabled && isTerrainPipeline(pipelineLocation);
+        return isTerrainPipeline(pipelineLocation);
     }
 
     public static long[] packedAttributeFormats() {
-        return PACKED_ATTRIBUTE_FORMATS.clone();
+        return PACKED_ATTRIBUTE_FORMATS;
     }
 
     public static long[] packedAttributeOffsets() {
-        return PACKED_ATTRIBUTE_OFFSETS.clone();
+        return PACKED_ATTRIBUTE_OFFSETS;
     }
 
     public static int vertexSizeFor(final VertexFormat format) {
-        return enabled && format == DefaultVertexFormat.BLOCK ? PACKED_TERRAIN_VERTEX_SIZE : format.getVertexSize();
+        return format == DefaultVertexFormat.BLOCK ? PACKED_TERRAIN_VERTEX_SIZE : format.getVertexSize();
     }
 
     public static void optimize(final SectionCompiler.Results results, final SectionBufferBuilderPack sectionBufferBuilderPack) {
-        if (!enabled) {
-            return;
-        }
-
         Map<ChunkSectionLayer, MeshData> renderedLayers = ((SectionCompilerResultsAccessor) (Object) results).metallum$getRenderedLayers();
         for (Map.Entry<ChunkSectionLayer, MeshData> entry : renderedLayers.entrySet()) {
             optimizeLayer(entry.getKey(), entry.getValue(), sectionBufferBuilderPack.buffer(entry.getKey()));
@@ -110,7 +100,7 @@ public final class MetalTerrainVertexPacking {
         }
 
         long sourceBase = MemoryUtil.memAddress(source);
-        MetalTerrainFaceCulling.CullableFaceLayout faceLayout = MetalTerrainFaceCulling.buildCullableFaceLayout(layer, mesh, drawState, sourceBase);
+        MetalTerrainFaceCulling.CullableFaceLayout faceLayout = MetalTerrainFaceCulling.buildCullableFaceLayout(layer, drawState, sourceBase);
         long destinationBase = target.reserve(Math.multiplyExact(vertexCount, PACKED_TERRAIN_VERTEX_SIZE));
         boolean packed = faceLayout == null
                 ? packVertices(sourceBase, destinationBase, vertexCount)
@@ -188,11 +178,12 @@ public final class MetalTerrainVertexPacking {
         MemoryUtil.memPutShort(dst + DST_UV0_U, toUnorm16(u));
         MemoryUtil.memPutShort(dst + DST_UV0_V, toUnorm16(v));
         MemoryUtil.memCopy(src + SRC_UV2, dst + DST_UV2, 4);
+
         return true;
     }
 
     private static short toUnorm16(final float value) {
-        float clamped = Math.max(0.0F, Math.min(1.0F, value));
+        float clamped = Math.clamp(value, 0.0F, 1.0F);
         return (short) Math.round(clamped * 65535.0F);
     }
 }

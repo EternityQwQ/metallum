@@ -21,7 +21,6 @@ final class MetalSurface implements GpuSurfaceBackend {
     private final MetalDevice device;
     private final MemorySegment metalLayer;
     private GpuSurface.Configuration configuration;
-    private MemorySegment drawable = MemorySegment.NULL;
     private MetalCommandEncoder pendingPresentEncoder;
 
     MetalSurface(final MetalDevice device, final MemorySegment metalLayer) {
@@ -51,17 +50,7 @@ final class MetalSurface implements GpuSurfaceBackend {
     }
 
     @Override
-    public void acquireNextTexture() throws SurfaceException {
-        if (this.configuration == null) {
-            throw new SurfaceException("Metal surface must be configured before acquire");
-        }
-        if (this.hasDrawable()) {
-            throw new SurfaceException("Metal drawable is already acquired");
-        }
-        this.drawable = MetalNativeBridge.INSTANCE.CAMetalLayer_nextDrawable(this.metalLayer);
-        if (!this.hasDrawable()) {
-            throw new SurfaceException("Failed to acquire Metal drawable");
-        }
+    public void acquireNextTexture() {
     }
 
     @Override
@@ -69,35 +58,18 @@ final class MetalSurface implements GpuSurfaceBackend {
         if (!(commandEncoder instanceof MetalCommandEncoder metalEncoder)) {
             throw new IllegalArgumentException("Metal surface requires MetalCommandEncoder");
         }
-        if (!this.hasDrawable()) {
-            throw new IllegalStateException("Metal surface has no acquired drawable");
-        }
 
-        metalEncoder.presentTextureToDrawable(this.drawable, textureView);
+        metalEncoder.presentTextureToDrawable(metalLayer, textureView);
         this.pendingPresentEncoder = metalEncoder;
     }
 
     @Override
     public void present() {
-        if (this.pendingPresentEncoder == null || !this.hasDrawable()) {
-            throw new IllegalStateException("Metal surface has no pending drawable present");
-        }
-
-        drawable = MemorySegment.NULL;
         pendingPresentEncoder.submit();
-        pendingPresentEncoder = null;
     }
 
     @Override
     public void close() {
-        if (this.hasDrawable()) {
-            MetalNativeBridge.INSTANCE.metallum_release_object(this.drawable);
-            this.drawable = MemorySegment.NULL;
-        }
-    }
-
-    private boolean hasDrawable() {
-        return !MetalNativeBridge.isNullHandle(this.drawable);
     }
 
     @Override

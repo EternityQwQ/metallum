@@ -45,7 +45,7 @@ final class MetalTransientMemory implements TransientMemory {
 
     void rotate() {
         cpuBlockAllocator.rotate().run();
-        encoder.queueForDestroy(gpuBlockAllocator.rotate()::run);
+        encoder.queueForDestroy(gpuBlockAllocator.rotate());
         submitIndex++;
     }
 
@@ -63,24 +63,24 @@ final class MetalTransientMemory implements TransientMemory {
     }
 
     @Override
-    public ByteBuffer allocateCpu(final long size, final long alignment, final long minimumAllocation, final long elementSize) {
+    public @NonNull ByteBuffer allocateCpu(final long size, final long alignment, final long minimumAllocation, final long elementSize) {
         TransientBlockAllocator.Allocation<Long> alloc = cpuBlockAllocator.allocate(size, alignment, minimumAllocation, elementSize);
         return MemoryUtil.memByteBuffer(alloc.block() + alloc.offset(), (int) alloc.size());
     }
 
     @Override
-    public MappedView allocateStaging(final long size, final long alignment, @Usage final int usage, final long minimumAllocation, final long elementSize) {
+    public @NonNull MappedView allocateStaging(final long size, final long alignment, @Usage final int usage, final long minimumAllocation, final long elementSize) {
         return allocateMapped(size, alignment, usage, minimumAllocation, elementSize);
     }
 
     @Override
-    public GpuBufferSlice allocateGpu(final long size, final long alignment, @Usage final int usage, final long minimumAllocation, final long elementSize) {
+    public @NonNull GpuBufferSlice allocateGpu(final long size, final long alignment, @Usage final int usage, final long minimumAllocation, final long elementSize) {
         TransientBlockAllocator.Allocation<MetalGpuBuffer> alloc = gpuBlockAllocator.allocate(size, alignment, minimumAllocation, elementSize);
         return new GpuBufferSlice(wrap(alloc.block(), usage), alloc.offset(), alloc.size());
     }
 
     @Override
-    public MappedView allocateGpuMapped(final long size, final long alignment, @Usage final int usage, final long minimumAllocation, final long elementSize) {
+    public @NonNull MappedView allocateGpuMapped(final long size, final long alignment, @Usage final int usage, final long minimumAllocation, final long elementSize) {
         return allocateMapped(size, alignment, usage, minimumAllocation, elementSize);
     }
 
@@ -97,12 +97,12 @@ final class MetalTransientMemory implements TransientMemory {
     }
 
     @Override
-    public GpuBufferSlice uploadStaging(final List<ByteBuffer> data, final long alignment, @Usage final int usage, final long minimumAllocation, final long elementSize) {
+    public @NonNull GpuBufferSlice uploadStaging(final @NonNull List<ByteBuffer> data, final long alignment, @Usage final int usage, final long minimumAllocation, final long elementSize) {
         return upload(data, alignment, usage, minimumAllocation, elementSize);
     }
 
     @Override
-    public GpuBufferSlice uploadGpu(final List<ByteBuffer> data, final long alignment, @Usage final int usage, final long minimumAllocation, final long elementSize) {
+    public @NonNull GpuBufferSlice uploadGpu(final @NonNull List<ByteBuffer> data, final long alignment, @Usage final int usage, final long minimumAllocation, final long elementSize) {
         return upload(data, alignment, usage, minimumAllocation, elementSize);
     }
 
@@ -131,12 +131,12 @@ final class MetalTransientMemory implements TransientMemory {
     }
 
     @Override
-    public List<GpuBufferSlice> multiUploadStaging(final List<ByteBuffer> data, final long alignment, @Usage final int usage) {
+    public @NonNull List<GpuBufferSlice> multiUploadStaging(final @NonNull List<ByteBuffer> data, final long alignment, @Usage final int usage) {
         return multiUpload(data, alignment, usage);
     }
 
     @Override
-    public List<GpuBufferSlice> multiUploadGpu(final List<ByteBuffer> data, final long alignment, @Usage final int usage) {
+    public @NonNull List<GpuBufferSlice> multiUploadGpu(final @NonNull List<ByteBuffer> data, final long alignment, @Usage final int usage) {
         return multiUpload(data, alignment, usage);
     }
 

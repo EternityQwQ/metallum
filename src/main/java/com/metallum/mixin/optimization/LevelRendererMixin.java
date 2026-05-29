@@ -15,7 +15,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(LevelRenderer.class)
 public abstract class LevelRendererMixin {
     @Inject(method = "prepareChunkRenders", at = @At("HEAD"))
-    private void metallum$beginTerrainFaceCullingPrepare(final Matrix4fc viewRotationMatrix, final CallbackInfoReturnable<ChunkSectionsToRender> cir) {
+    private void metallum$beginTerrainFaceCullingPrepare(final Matrix4fc modelViewMatrix, final CallbackInfoReturnable<ChunkSectionsToRender> cir) {
         MetalTerrainFaceCulling.beginPrepare();
     }
 

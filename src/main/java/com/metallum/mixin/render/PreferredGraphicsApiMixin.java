@@ -1,7 +1,6 @@
 package com.metallum.mixin.render;
 
 import com.metallum.client.metal.render.MetalBackend;
-import com.metallum.client.metal.render.bridge.MetalNativeBridge;
 import com.mojang.blaze3d.opengl.GlBackend;
 import com.mojang.blaze3d.systems.GpuBackend;
 import com.mojang.blaze3d.vulkan.VulkanBackend;
@@ -17,7 +16,7 @@ abstract class PreferredGraphicsApiMixin {
     @Inject(method = "getBackendsToTry", at = @At("HEAD"), cancellable = true)
     private void metallum$injectMetalBackend(final CallbackInfoReturnable<GpuBackend[]> cir) {
         PreferredGraphicsApi self = (PreferredGraphicsApi) (Object) this;
-        if (self != PreferredGraphicsApi.DEFAULT || !MetalNativeBridge.isMacOs()) {
+        if (self != PreferredGraphicsApi.DEFAULT) {
             return;
         }
 
@@ -27,7 +26,7 @@ abstract class PreferredGraphicsApiMixin {
     @Inject(method = "caption", at = @At("HEAD"), cancellable = true)
     private void metallum$renameDefaultApiToMetal(final CallbackInfoReturnable<Component> cir) {
         PreferredGraphicsApi self = (PreferredGraphicsApi) (Object) this;
-        if (self == PreferredGraphicsApi.DEFAULT && MetalNativeBridge.isMacOs()) {
+        if (self == PreferredGraphicsApi.DEFAULT) {
             cir.setReturnValue(Component.literal("Prefer Metal"));
         }
     }

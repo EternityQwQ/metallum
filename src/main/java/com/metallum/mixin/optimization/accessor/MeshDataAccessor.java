@@ -11,10 +11,4 @@ public interface MeshDataAccessor {
     @Mutable
     @Accessor("vertexBuffer")
     void metallum$setVertexBuffer(ByteBufferBuilder.Result vertexBuffer);
-
-    @Accessor("indexBuffer")
-    ByteBufferBuilder.Result metallum$getIndexBuffer();
-
-    @Accessor("indexBuffer")
-    void metallum$setIndexBuffer(ByteBufferBuilder.Result indexBuffer);
 }

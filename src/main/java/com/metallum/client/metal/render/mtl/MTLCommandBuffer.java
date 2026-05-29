@@ -86,12 +86,8 @@ public final class MTLCommandBuffer {
         );
     }
 
-    public void encodePresentTextureToDrawable(final MemorySegment drawable, final MemorySegment sourceTexture, final MemorySegment globalFence) {
-        MetalNativeBridge.INSTANCE.MTLCommandBuffer_encodePresentTextureToDrawable(handle(), drawable, sourceTexture, globalFence);
-    }
-
-    public void presentDrawable(final MemorySegment drawable) {
-        MetalNativeBridge.INSTANCE.MTLCommandBuffer_presentDrawable(handle(), drawable);
+    public void encodePresentTextureToDrawable(final MemorySegment layer, final MemorySegment sourceTexture, final MemorySegment globalFence) {
+        MetalNativeBridge.INSTANCE.MTLCommandBuffer_encodePresentTextureToDrawable(handle(), layer, sourceTexture, globalFence);
     }
 
     public void commit() {

@@ -1,6 +1,5 @@
 package com.metallum.client.metal.optimization;
 
-import com.metallum.mixin.optimization.accessor.MeshDataAccessor;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.vertex.MeshData;
@@ -22,8 +21,6 @@ public final class MetalTerrainFaceCulling {
     private static final double SECTION_SIZE = 16.0;
     private static final double CAMERA_EPSILON = 1.0E-4;
     private static final float NORMAL_EPSILON = 1.0E-6F;
-    private static final int MIN_CLASSIFIED_RATIO_NUMERATOR = 3;
-    private static final int MIN_CLASSIFIED_RATIO_DENOMINATOR = 4;
 
     private static final int NEGATIVE_X = 0;
     private static final int NEGATIVE_Y = 1;
@@ -36,18 +33,10 @@ public final class MetalTerrainFaceCulling {
 
     private static final Map<DrawKey, VisibleRanges> VISIBLE_DRAW_RANGES = new HashMap<>();
 
-    private static volatile boolean enabled;
     @Nullable
     private static volatile Vec3 cameraPosition;
 
     private MetalTerrainFaceCulling() {
-    }
-
-    public static void setEnabled(final boolean enabled) {
-        MetalTerrainFaceCulling.enabled = enabled;
-        if (!MetalTerrainFaceCulling.enabled) {
-            beginPrepare();
-        }
     }
 
     static void attachSegments(final MeshData mesh, final FaceSegments segments) {
@@ -61,15 +50,10 @@ public final class MetalTerrainFaceCulling {
     @Nullable
     static CullableFaceLayout buildCullableFaceLayout(
             final ChunkSectionLayer layer,
-            final MeshData sourceMesh,
             final MeshData.DrawState drawState,
             final long sourceBase
     ) {
-        if (!enabled || !isCullableLayer(layer)) {
-            return null;
-        }
-
-        if (((MeshDataAccessor) sourceMesh).metallum$getIndexBuffer() != null) {
+        if (!isCullableLayer(layer)) {
             return null;
         }
 
@@ -111,7 +95,7 @@ public final class MetalTerrainFaceCulling {
             }
         }
 
-        if (classifiedQuads == 0 || classifiedQuads * MIN_CLASSIFIED_RATIO_DENOMINATOR < quadCount * MIN_CLASSIFIED_RATIO_NUMERATOR) {
+        if (classifiedQuads == 0) {
             return null;
         }
 
@@ -137,11 +121,9 @@ public final class MetalTerrainFaceCulling {
     }
 
     public static void rememberSectionOrigin(final SectionMesh sectionMesh, final BlockPos origin) {
-        if (!enabled || !(sectionMesh instanceof SectionMeshSegments)) {
-            return;
+        if (sectionMesh instanceof SectionMeshSegments segmentsHolder) {
+            segmentsHolder.metallum$getSegments().origin = origin.immutable();
         }
-
-        ((SectionMeshSegments) sectionMesh).metallum$setTerrainSectionOrigin(origin.immutable());
     }
 
     public static void registerVisibleRanges(
@@ -149,13 +131,14 @@ public final class MetalTerrainFaceCulling {
             final ChunkSectionLayer layer,
             final SectionRenderDispatcher.RenderSectionBufferSlice slice
     ) {
-        if (!enabled || !isCullableLayer(layer) || slice == null || !(sectionMesh instanceof SectionMeshSegments segmentsHolder)) {
+        if (!isCullableLayer(layer) || slice == null || !(sectionMesh instanceof SectionMeshSegments segmentsHolder)) {
             return;
         }
 
+        SectionSegments sectionSegments = segmentsHolder.metallum$getSegments();
         FaceSegments segments = layer == ChunkSectionLayer.SOLID
-                ? segmentsHolder.metallum$getTerrainFaceSegments()
-                : segmentsHolder.metallum$getCutoutTerrainFaceSegments();
+                ? sectionSegments.solid
+                : sectionSegments.cutout;
         if (segments == null) {
             return;
         }
@@ -169,7 +152,7 @@ public final class MetalTerrainFaceCulling {
             return;
         }
 
-        BlockPos origin = segmentsHolder.metallum$getTerrainSectionOrigin();
+        BlockPos origin = sectionSegments.origin;
         Vec3 camera = cameraPosition;
         if (origin == null || camera == null) {
             return;
@@ -193,10 +176,6 @@ public final class MetalTerrainFaceCulling {
 
     @Nullable
     public static VisibleRanges takeVisibleRanges(final RenderPass.Draw<?> draw, @Nullable final GpuBuffer resolvedIndexBuffer) {
-        if (!enabled) {
-            return null;
-        }
-
         GpuBuffer indexBuffer = draw.indexBuffer() == null ? null : resolvedIndexBuffer;
         return VISIBLE_DRAW_RANGES.remove(new DrawKey(draw.vertexBuffer(), indexBuffer, draw.firstIndex(), draw.indexCount(), draw.baseVertex()));
     }
@@ -230,24 +209,19 @@ public final class MetalTerrainFaceCulling {
         }
 
         if (ax >= ay && ax >= az) {
-            return dominantAxisBucket(nx, ax, Math.max(ay, az), NEGATIVE_X, POSITIVE_X);
+            return dominantAxisBucket(nx, NEGATIVE_X, POSITIVE_X);
         }
         if (ay >= az) {
-            return dominantAxisBucket(ny, ay, Math.max(ax, az), NEGATIVE_Y, POSITIVE_Y);
+            return dominantAxisBucket(ny, NEGATIVE_Y, POSITIVE_Y);
         }
-        return dominantAxisBucket(nz, az, Math.max(ax, ay), NEGATIVE_Z, POSITIVE_Z);
+        return dominantAxisBucket(nz, NEGATIVE_Z, POSITIVE_Z);
     }
 
     private static int dominantAxisBucket(
             final float normalComponent,
-            final float largestAbsComponent,
-            final float secondLargestAbsComponent,
             final int negativeBucket,
             final int positiveBucket
     ) {
-        if (secondLargestAbsComponent * 8.0F > largestAbsComponent) {
-            return UNKNOWN;
-        }
 
         return normalComponent > 0.0F ? positiveBucket : negativeBucket;
     }
@@ -283,21 +257,14 @@ public final class MetalTerrainFaceCulling {
         void metallum$setTerrainFaceSegments(@Nullable FaceSegments segments);
     }
 
+    public static final class SectionSegments {
+        public FaceSegments solid;
+        public FaceSegments cutout;
+        public BlockPos origin;
+    }
+
     public interface SectionMeshSegments {
-        @Nullable
-        FaceSegments metallum$getTerrainFaceSegments();
-
-        void metallum$setTerrainFaceSegments(FaceSegments segments);
-
-        @Nullable
-        FaceSegments metallum$getCutoutTerrainFaceSegments();
-
-        void metallum$setCutoutTerrainFaceSegments(FaceSegments segments);
-
-        @Nullable
-        BlockPos metallum$getTerrainSectionOrigin();
-
-        void metallum$setTerrainSectionOrigin(BlockPos origin);
+        SectionSegments metallum$getSegments();
     }
 
     public record FaceSegments(
@@ -416,7 +383,6 @@ public final class MetalTerrainFaceCulling {
             this.quadBuckets = quadBuckets;
             this.segments = segments;
             int vertexCursor = 0;
-            this.negativeXVertexCursor = vertexCursor;
             vertexCursor += indexCountToVertexCount(segments.negativeXIndexCount());
             this.negativeYVertexCursor = vertexCursor;
             vertexCursor += indexCountToVertexCount(segments.negativeYIndexCount());

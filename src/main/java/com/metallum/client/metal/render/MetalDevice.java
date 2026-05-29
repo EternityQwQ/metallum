@@ -1,7 +1,5 @@
 package com.metallum.client.metal.render;
 
-import com.metallum.client.metal.optimization.MetalTerrainFaceCulling;
-import com.metallum.client.metal.optimization.MetalTerrainVertexPacking;
 import com.metallum.client.metal.render.bridge.MetalNativeBridge;
 import com.metallum.client.metal.render.mtl.MTLCommandQueue;
 import com.mojang.blaze3d.GpuFormat;
@@ -53,8 +51,7 @@ final class MetalDevice implements GpuDeviceBackend {
         this.cocoaView = cocoaView;
         MetalNativeBridge.INSTANCE.metallum_set_debug_labels_enabled(this.useLabels());
         this.commandQueue = MTLCommandQueue.create(metalDeviceHandle);
-        MetalTerrainVertexPacking.setEnabled(true); //todo config
-        MetalTerrainFaceCulling.setEnabled(true);
+        MetalNativeBridge.INSTANCE.metallum_init_pipelines(metalDeviceHandle);
         this.commandEncoder = new MetalCommandEncoder(this);
         this.deviceInfo = buildDeviceInfo(deviceName);
     }
@@ -169,8 +166,6 @@ final class MetalDevice implements GpuDeviceBackend {
         }
         this.commandQueue.close();
         MetalNativeBridge.INSTANCE.metallum_release_object(this.metalDeviceHandle);
-        MetalTerrainFaceCulling.setEnabled(false);
-        MetalTerrainVertexPacking.setEnabled(false);
     }
 
     @Override
@@ -224,7 +219,7 @@ final class MetalDevice implements GpuDeviceBackend {
                 "Metal",
                 1.0F,
                 new DeviceLimits(16, 256, 16384, 1L << 30, 0, 1),
-                new DeviceFeatures(false, false, false, false, false, false, true),
+                new DeviceFeatures(false, false, true, false, false, false, true),
                 underlyingExtensions,
                 new HintsAndWorkarounds(false, false),
                 type

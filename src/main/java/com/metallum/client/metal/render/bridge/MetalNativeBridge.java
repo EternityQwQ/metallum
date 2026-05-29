@@ -2,7 +2,6 @@ package com.metallum.client.metal.render.bridge;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-
 import org.jspecify.annotations.Nullable;
 
 import java.io.IOException;
@@ -13,7 +12,6 @@ import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.Locale;
 
 @Environment(EnvType.CLIENT)
 public final class MetalNativeBridge {
@@ -67,9 +65,7 @@ public final class MetalNativeBridge {
     private final MethodHandle MTLRenderCommandEncoderDrawPrimitivesTriangleFan;
     private final MethodHandle MTLRenderCommandEncoderDrawIndexedPrimitivesTriangleFan;
     private final MethodHandle MTLCommandBufferClearColorDepthTexturesRegion;
-    private final MethodHandle CAMetalLayerNextDrawable;
     private final MethodHandle MTLCommandBufferEncodePresentTextureToDrawable;
-    private final MethodHandle MTLCommandBufferPresentDrawable;
     private final MethodHandle createBuffer;
     private final MethodHandle createTexture2d;
     private final MethodHandle createTextureView;
@@ -84,6 +80,8 @@ public final class MetalNativeBridge {
     private final MethodHandle MTLRenderCommandEncoderWaitForFence;
     private final MethodHandle MTLBlitCommandEncoderUpdateFence;
     private final MethodHandle MTLBlitCommandEncoderWaitForFence;
+    private final MethodHandle initPipelines;
+
 
     private MetalNativeBridge(final Arena libraryArena, final SymbolLookup lookup) {
         this.libraryArena = libraryArena;
@@ -94,6 +92,8 @@ public final class MetalNativeBridge {
         this.NSViewSetMetalLayer = downcall(lookup, "metallum_NSView_setMetalLayer", FunctionDescriptor.of(INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS));
         this.NSViewClearLayer = downcall(lookup, "metallum_NSView_clearLayer", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
         this.setDebugLabelsEnabled = downcall(lookup, "metallum_set_debug_labels_enabled", FunctionDescriptor.ofVoid(INT));
+        this.initPipelines = downcall(lookup, "metallum_init_pipelines", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+
         this.MTLDeviceMakeCommandQueue = downcall(lookup, "metallum_MTLDevice_makeCommandQueue", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
         this.MTLCommandQueueMakeCommandBuffer = downcall(lookup, "metallum_MTLCommandQueue_makeCommandBuffer", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS));
         this.MTLCommandBufferCommit = downcall(lookup, "metallum_MTLCommandBuffer_commit", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
@@ -191,13 +191,11 @@ public final class MetalNativeBridge {
                         ValueLayout.ADDRESS
                 )
         );
-        this.CAMetalLayerNextDrawable = downcall(lookup, "metallum_CAMetalLayer_nextDrawable", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
         this.MTLCommandBufferEncodePresentTextureToDrawable = downcall(
                 lookup,
                 "metallum_MTLCommandBuffer_encodePresentTextureToDrawable",
                 FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS)
         );
-        this.MTLCommandBufferPresentDrawable = downcall(lookup, "metallum_MTLCommandBuffer_presentDrawable", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
         this.createBuffer = downcall(lookup, "metallum_create_buffer", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, LONG));
         this.createTexture2d = downcall(
                 lookup,
@@ -339,6 +337,15 @@ public final class MetalNativeBridge {
             throw bridgeFailure("metallum_set_debug_labels_enabled", throwable);
         }
     }
+
+    public void metallum_init_pipelines(final MemorySegment device) {
+        try {
+            this.initPipelines.invokeExact(segment(device));
+        } catch (Throwable throwable) {
+            throw bridgeFailure("metallum_init_pipelines", throwable);
+        }
+    }
+
 
     public MemorySegment MTLDevice_makeCommandQueue(final MemorySegment device) {
         try {
@@ -953,27 +960,11 @@ public final class MetalNativeBridge {
         }
     }
 
-    public MemorySegment CAMetalLayer_nextDrawable(final MemorySegment layer) {
+    public void MTLCommandBuffer_encodePresentTextureToDrawable(final MemorySegment commandBuffer, final MemorySegment layer, final MemorySegment sourceTexture, final MemorySegment globalFence) {
         try {
-            return (MemorySegment) this.CAMetalLayerNextDrawable.invokeExact(segment(layer));
-        } catch (Throwable throwable) {
-            throw bridgeFailure("metallum_CAMetalLayer_nextDrawable", throwable);
-        }
-    }
-
-    public void MTLCommandBuffer_encodePresentTextureToDrawable(final MemorySegment commandBuffer, final MemorySegment drawable, final MemorySegment sourceTexture, final MemorySegment globalFence) {
-        try {
-            this.MTLCommandBufferEncodePresentTextureToDrawable.invokeExact(segment(commandBuffer), segment(drawable), segment(sourceTexture), segment(globalFence));
+            this.MTLCommandBufferEncodePresentTextureToDrawable.invokeExact(segment(commandBuffer), segment(layer), segment(sourceTexture), segment(globalFence));
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_MTLCommandBuffer_encodePresentTextureToDrawable", throwable);
-        }
-    }
-
-    public void MTLCommandBuffer_presentDrawable(final MemorySegment commandBuffer, final MemorySegment drawable) {
-        try {
-            this.MTLCommandBufferPresentDrawable.invokeExact(segment(commandBuffer), segment(drawable));
-        } catch (Throwable throwable) {
-            throw bridgeFailure("metallum_MTLCommandBuffer_presentDrawable", throwable);
         }
     }
 
@@ -1064,11 +1055,6 @@ public final class MetalNativeBridge {
 
     public static boolean isNullHandle(@Nullable final MemorySegment pointer) {
         return pointer == null || pointer.address() == 0L;
-    }
-
-    public static boolean isMacOs() {
-        String osName = System.getProperty("os.name", "");
-        return osName.toLowerCase(Locale.ROOT).contains("mac");
     }
 
     private static RuntimeException bridgeFailure(final String symbol, final Throwable throwable) {

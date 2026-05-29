@@ -27,7 +27,7 @@ final class MetalCommandEncoder implements CommandEncoderBackend {
     private final MetalDevice device;
     private long currentSubmitIndex = MAX_SUBMITS_IN_FLIGHT;
     private final InFlight[] inFlight = new InFlight[MAX_SUBMITS_IN_FLIGHT];
-    private final MetalDestructionQueue destroyQueue = new MetalDestructionQueue(MAX_SUBMITS_IN_FLIGHT + 1);
+    private final MetalDestructionQueue destroyQueue = new MetalDestructionQueue(MAX_SUBMITS_IN_FLIGHT);
     private final MetalTransientMemory transientMemory;
     private final Map<MetalGpuTexture, Vector4fc> pendingColorClears = new IdentityHashMap<>();
     private final Map<MetalGpuTexture, Double> pendingDepthClears = new IdentityHashMap<>();
@@ -225,7 +225,6 @@ final class MetalCommandEncoder implements CommandEncoderBackend {
         endEncoder();
         MTLCommandBuffer commandBuffer = commandBuffer();
         commandBuffer.encodePresentTextureToDrawable(drawable, source.nativeHandle(), fence);
-        commandBuffer.presentDrawable(drawable);
     }
 
     @Override

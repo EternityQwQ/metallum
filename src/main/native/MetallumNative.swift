@@ -49,9 +49,9 @@ private enum NativeState {
     static var dynamicPipelines: [DynamicPipelineKey: MTLRenderPipelineState] = [:]
     static var depthStencilStates: [DepthStencilKey: MTLDepthStencilState] = [:]
     static var clearPipelines: [PipelineVariantKey: MTLRenderPipelineState] = [:]
-    static var presentPipelines: [PipelineVariantKey: MTLRenderPipelineState] = [:]
-    static var presentNearestSamplers: [UInt: MTLSamplerState] = [:]
-    static var presentLinearSamplers: [UInt: MTLSamplerState] = [:]
+    static var presentPipeline: MTLRenderPipelineState!
+    static var presentNearestSampler: MTLSamplerState!
+    static var presentLinearSampler: MTLSamplerState!
 }
 
 @inline(__always)
@@ -441,59 +441,15 @@ private func buildPresentPipeline(
     }
 }
 
-private func ensurePresentLinearSampler(_ device: MTLDevice) -> MTLSamplerState? {
+private func buildPresentSampler(device: MTLDevice, filter: MTLSamplerMinMagFilter) -> MTLSamplerState? {
     return withMetalAutoreleasePool {
-    let key = objectAddress(device)
-    if let cached = NativeState.presentLinearSamplers[key] {
-        return cached
-    }
     let descriptor = MTLSamplerDescriptor()
-
-    descriptor.minFilter = .linear
-    descriptor.magFilter = .linear
+    descriptor.minFilter = filter
+    descriptor.magFilter = filter
     descriptor.mipFilter = .notMipmapped
     descriptor.sAddressMode = .clampToEdge
     descriptor.tAddressMode = .clampToEdge
-    let sampler = device.makeSamplerState(descriptor: descriptor)
-    if let sampler {
-        NativeState.presentLinearSamplers[key] = sampler
-    }
-    return sampler
-    }
-}
-
-private func ensurePresentNearestSampler(_ device: MTLDevice) -> MTLSamplerState? {
-    return withMetalAutoreleasePool {
-    let key = objectAddress(device)
-    if let cached = NativeState.presentNearestSamplers[key] {
-        return cached
-    }
-    let descriptor = MTLSamplerDescriptor()
-
-    descriptor.minFilter = .nearest
-    descriptor.magFilter = .nearest
-    descriptor.mipFilter = .notMipmapped
-    descriptor.sAddressMode = .clampToEdge
-    descriptor.tAddressMode = .clampToEdge
-    let sampler = device.makeSamplerState(descriptor: descriptor)
-    if let sampler {
-        NativeState.presentNearestSamplers[key] = sampler
-    }
-    return sampler
-    }
-}
-
-private func ensurePresentPipeline(_ device: MTLDevice, _ colorFormat: MTLPixelFormat) -> MTLRenderPipelineState? {
-    return withMetalAutoreleasePool {
-    let key = PipelineVariantKey(deviceAddress: objectAddress(device), colorFormat: colorFormat, depthFormat: .invalid)
-    if let cached = NativeState.presentPipelines[key] {
-        return cached
-    }
-    let pipeline = buildPresentPipeline(device: device, colorFormat: colorFormat)
-    if let pipeline {
-        NativeState.presentPipelines[key] = pipeline
-    }
-    return pipeline
+    return device.makeSamplerState(descriptor: descriptor)
     }
 }
 
@@ -510,6 +466,22 @@ private func ensureClearColorDepthPipeline(_ device: MTLDevice, _ colorFormat: M
     return pipeline
     }
 }
+
+@_cdecl("metallum_init_pipelines")
+public func metallum_init_pipelines(_ devicePtr: UnsafeMutableRawPointer?) {
+    return withMetalAutoreleasePool {
+    guard let device: MTLDevice = object(devicePtr) else {
+        return
+    }
+    NativeState.presentPipeline = buildPresentPipeline(device: device, colorFormat: .bgra8Unorm)
+    NativeState.presentLinearSampler = buildPresentSampler(device: device, filter: .linear)
+    NativeState.presentNearestSampler = buildPresentSampler(device: device, filter: .nearest)
+    _ = ensureClearColorDepthPipeline(device, .bgra8Unorm, .depth32Float)
+    _ = ensureClearColorDepthPipeline(device, .rgba8Unorm, .depth32Float)
+    _ = ensureClearColorDepthPipeline(device, .bgra8Unorm, .invalid)
+    }
+}
+
 
 private func ensureDepthStencilState(device: MTLDevice, compareOp: UInt64, writeDepth: Bool) -> MTLDepthStencilState? {
     return withMetalAutoreleasePool {
@@ -1779,33 +1751,20 @@ public func metallum_configure_layer(_ layerPtr: UnsafeMutableRawPointer?, _ wid
     }
 }
 
-@_cdecl("metallum_CAMetalLayer_nextDrawable")
-public func metallum_CAMetalLayer_nextDrawable(_ layerPtr: UnsafeMutableRawPointer?) -> UnsafeMutableRawPointer? {
-    return withMetalAutoreleasePool {
-    guard let layer: CAMetalLayer = object(layerPtr), let drawable = layer.nextDrawable() else {
-        return nil
-    }
-    return retainedPointer(drawable)
-    }
-}
-
 @_cdecl("metallum_MTLCommandBuffer_encodePresentTextureToDrawable")
 public func metallum_MTLCommandBuffer_encodePresentTextureToDrawable(
     _ commandBufferPtr: UnsafeMutableRawPointer?,
-    _ drawablePtr: UnsafeMutableRawPointer?,
+    _ layerPtr: UnsafeMutableRawPointer?,
     _ sourceTexturePtr: UnsafeMutableRawPointer?,
     _ globalFencePtr: UnsafeMutableRawPointer?
 ) {
     return withMetalAutoreleasePool {
         guard
             let commandBuffer: MTLCommandBuffer = object(commandBufferPtr),
-            let drawable: CAMetalDrawable = object(drawablePtr),
+            let layer: CAMetalLayer = object(layerPtr),
+            let drawable: CAMetalDrawable = layer.nextDrawable(),
             let sourceTexture: MTLTexture = object(sourceTexturePtr)
         else {
-            return
-        }
-
-        guard let pipeline = ensurePresentPipeline(sourceTexture.device, drawable.texture.pixelFormat) else {
             return
         }
 
@@ -1831,19 +1790,14 @@ public func metallum_MTLCommandBuffer_encodePresentTextureToDrawable(
             zfar: 1.0
         ))
 
-        encoder.setRenderPipelineState(pipeline)
+        encoder.setRenderPipelineState(NativeState.presentPipeline)
         encoder.setFragmentTexture(sourceTexture, index: 0)
 
         let requiresScaling = sourceTexture.width != drawable.texture.width ||
                               sourceTexture.height != drawable.texture.height
 
-        let sampler = requiresScaling
-            ? ensurePresentLinearSampler(sourceTexture.device)
-            : ensurePresentNearestSampler(sourceTexture.device)
-
-        if let sampler {
-            encoder.setFragmentSamplerState(sampler, index: 0)
-        }
+        let sampler = requiresScaling ? NativeState.presentLinearSampler : NativeState.presentNearestSampler
+        encoder.setFragmentSamplerState(sampler, index: 0)
 
         encoder.drawPrimitives(
             type: .triangle,
@@ -1852,6 +1806,7 @@ public func metallum_MTLCommandBuffer_encodePresentTextureToDrawable(
         )
 
         encoder.endEncoding()
+        commandBuffer.present(drawable)
     }
 }
 
@@ -1914,16 +1869,6 @@ public func MTLBlitCommandEncoder_waitForFence(
               let fence: MTLFence = object(fencePtr)
         else { return }
         encoder.waitForFence(fence)
-    }
-}
-
-@_cdecl("metallum_MTLCommandBuffer_presentDrawable")
-public func metallum_MTLCommandBuffer_presentDrawable(_ commandBufferPtr: UnsafeMutableRawPointer?, _ drawablePtr: UnsafeMutableRawPointer?) {
-    return withMetalAutoreleasePool {
-    guard let commandBuffer: MTLCommandBuffer = object(commandBufferPtr), let drawable: CAMetalDrawable = object(drawablePtr) else {
-        return
-    }
-    commandBuffer.present(drawable)
     }
 }
 
