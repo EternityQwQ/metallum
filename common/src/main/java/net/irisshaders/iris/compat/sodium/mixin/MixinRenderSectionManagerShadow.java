@@ -92,6 +92,10 @@ public abstract class MixinRenderSectionManagerShadow implements ShadowRenderLis
 
 	@Unique
 	private void iris$swapToShadowRenderLists() {
+		if (this.renderListStateIsShadow) {
+			return;
+		}
+
 		for (var region : this.regions.getLoadedRegions()) {
 			((ShadowRenderRegion) region).swapToShadowRenderList();
 		}

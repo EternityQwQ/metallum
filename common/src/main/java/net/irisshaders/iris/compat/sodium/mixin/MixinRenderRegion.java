@@ -74,6 +74,21 @@ public class MixinRenderRegion implements ShadowRenderRegion {
 		}
 	}
 
+	@Inject(method = "delete", at = @At("HEAD"))
+	private void iris$delete(CallbackInfo ci) {
+		if (this.regularCachedBatches != null) {
+			for(MultiDrawBatch batch : this.regularCachedBatches.values()) {
+				batch.delete();
+			}
+		}
+
+		if (this.shadowCachedBatches != null) {
+			for(MultiDrawBatch batch : this.shadowCachedBatches.values()) {
+				batch.delete();
+			}
+		}
+	}
+
 	@Override
 	public void iris$forceClearAllBatches() {
 		if (this.regularCachedBatches != null) {

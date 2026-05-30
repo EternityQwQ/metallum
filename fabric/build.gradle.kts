@@ -99,6 +99,7 @@ loom {
             configName = "Fabric Client"
             ideConfigGenerated(true)
             runDir("run")
+            vmArg("-Dorg.lwjgl.util.DebugAllocator=true")
            // vmArgs("-Dmixin.debug.export=true")
            // vmArg("-XX:+AllowEnhancedClassRedefinition")
         }
