@@ -2,7 +2,6 @@ package com.metallum.client.metal.render;
 
 import com.metallum.client.metal.optimization.MetalTerrainVertexPacking;
 import com.metallum.client.metal.render.bridge.MetalNativeBridge;
-import com.metallum.client.metal.render.mtl.MTLPixelFormat;
 import com.metallum.client.metal.render.mtl.MTLVertexFormat;
 import com.mojang.blaze3d.GpuFormat;
 import com.mojang.blaze3d.pipeline.CompiledRenderPipeline;
@@ -15,15 +14,15 @@ import net.fabricmc.api.Environment;
 import org.jspecify.annotations.Nullable;
 
 import java.lang.foreign.MemorySegment;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Environment(EnvType.CLIENT)
-final class MetalCompiledRenderPipeline implements CompiledRenderPipeline {
+final class MetalCompiledRenderPipeline implements CompiledRenderPipeline, AutoCloseable {
     private static final int MAX_METAL_VERTEX_BUFFER_SLOT = 30;
+    private static final int MAIN_VERTEX_BINDING_INDEX = 0;
 
     enum ResourceKind {
         UNIFORM_BUFFER,
@@ -46,12 +45,7 @@ final class MetalCompiledRenderPipeline implements CompiledRenderPipeline {
     private final String fragmentEntryPoint;
     private final List<ResourceBinding> resources;
     private final Map<String, ResourceBinding> resourcesByName;
-    private final long[] vertexAttributeFormats;
-    private final long[] vertexAttributeOffsets;
-    private final long[] vertexAttributeBufferSlots;
-    private final long[] vertexBindingBufferSlots;
-    private final long[] vertexBindingStrides;
-    private final long[] vertexBindingStepRates;
+    private final MetalVertexDescriptor vertexDescriptor;
     private final int[] metalSlotByVertexBinding;
     private final long depthCompareOp;
     private final int depthWrite;
@@ -75,14 +69,12 @@ final class MetalCompiledRenderPipeline implements CompiledRenderPipeline {
         this.fragmentEntryPoint = fragmentEntryPoint;
         this.resources = resources;
         this.resourcesByName = resources.stream().collect(java.util.stream.Collectors.toUnmodifiableMap(ResourceBinding::name, binding -> binding));
-        VertexInputState vertexInput = buildVertexInputState(info, firstAvailableVertexBufferSlot(resources));
-        this.vertexAttributeFormats = vertexInput.attributeFormats();
-        this.vertexAttributeOffsets = vertexInput.attributeOffsets();
-        this.vertexAttributeBufferSlots = vertexInput.attributeBufferSlots();
-        this.vertexBindingBufferSlots = vertexInput.bindingBufferSlots();
-        this.vertexBindingStrides = vertexInput.bindingStrides();
-        this.vertexBindingStepRates = vertexInput.bindingStepRates();
-        this.metalSlotByVertexBinding = vertexInput.metalSlotByVertexBinding();
+
+        int[] metalSlotByVertexBinding = new int[RenderPass.MAX_VERTEX_BUFFERS];
+        Arrays.fill(metalSlotByVertexBinding, -1);
+        this.vertexDescriptor = buildVertexDescriptor(info, firstAvailableVertexBufferSlot(resources), metalSlotByVertexBinding);
+        this.metalSlotByVertexBinding = metalSlotByVertexBinding;
+
         var depthStencilState = info.getDepthStencilState();
         if (depthStencilState == null) {
             this.depthCompareOp = 1L;
@@ -144,18 +136,17 @@ final class MetalCompiledRenderPipeline implements CompiledRenderPipeline {
         return created;
     }
 
-    private static VertexInputState buildVertexInputState(final RenderPipeline pipeline, final int firstMetalVertexBufferSlot) {
+    private static MetalVertexDescriptor buildVertexDescriptor(
+            final RenderPipeline pipeline,
+            final int firstMetalVertexBufferSlot,
+            final int[] metalSlotByVertexBinding
+    ) {
         VertexFormat[] bindings = pipeline.getVertexFormatBindings();
-        int[] metalSlotByVertexBinding = new int[RenderPass.MAX_VERTEX_BUFFERS];
-        Arrays.fill(metalSlotByVertexBinding, -1);
-        List<Long> attributeFormats = new ArrayList<>();
-        List<Long> attributeOffsets = new ArrayList<>();
-        List<Long> attributeBufferSlots = new ArrayList<>();
-        List<Long> bindingBufferSlots = new ArrayList<>();
-        List<Long> bindingStrides = new ArrayList<>();
-        List<Long> bindingStepRates = new ArrayList<>();
         int nextMetalSlot = firstMetalVertexBufferSlot;
         boolean packedTerrain = MetalTerrainVertexPacking.isPackedTerrainPipeline(pipeline.getLocation().toString());
+
+        MetalVertexDescriptor vertexDesc = new MetalVertexDescriptor();
+        long attrIndex = 0;
 
         for (int i = 0; i < bindings.length; i++) {
             VertexFormat binding = bindings[i];
@@ -169,25 +160,32 @@ final class MetalCompiledRenderPipeline implements CompiledRenderPipeline {
 
             int metalSlot = nextMetalSlot++;
             metalSlotByVertexBinding[i] = metalSlot;
-            bindingBufferSlots.add((long) metalSlot);
-            bindingStrides.add((long) (packedTerrain && i == 0 ? MetalTerrainVertexPacking.PACKED_TERRAIN_VERTEX_SIZE : binding.getVertexSize()));
-            bindingStepRates.add((long) binding.getStepRate());
-            if (packedTerrain && i == 0) {
-                addPackedTerrainAttributes(attributeFormats, attributeOffsets, attributeBufferSlots, metalSlot);
+
+            long stride = packedTerrain && i == MAIN_VERTEX_BINDING_INDEX ? MetalTerrainVertexPacking.PACKED_TERRAIN_VERTEX_SIZE : binding.getVertexSize();
+            long stepRate = binding.getStepRate();
+            long stepFunction = stepRate > 0 ? 1 : 0; // 0 = perVertex, 1 = perInstance
+            vertexDesc.setLayout((long) metalSlot, stride, stepFunction, stepRate > 0 ? stepRate : 1);
+
+            if (packedTerrain && i == MAIN_VERTEX_BINDING_INDEX) {
+                long[] packedFormats = MetalTerrainVertexPacking.packedAttributeFormats();
+                long[] packedOffsets = MetalTerrainVertexPacking.packedAttributeOffsets();
+                for (int k = 0; k < packedFormats.length; k++) {
+                    vertexDesc.setAttribute(attrIndex, packedFormats[k], packedOffsets[k], (long) metalSlot);
+                    attrIndex++;
+                }
             } else {
-                addVertexFormatAttributes(attributeFormats, attributeOffsets, attributeBufferSlots, binding, metalSlot);
+                for (VertexFormatElement element : binding.getElements()) {
+                    MTLVertexFormat format = MetalPipelineSupport.vertexAttributeFormat(element.format());
+                    if (format.value == MTLVertexFormat.Invalid.value) {
+                        throw new IllegalStateException("Unsupported vertex attribute format: " + element.format());
+                    }
+                    vertexDesc.setAttribute(attrIndex, format.value, (long) element.offset(), (long) metalSlot);
+                    attrIndex++;
+                }
             }
         }
 
-        return new VertexInputState(
-                toLongArray(attributeFormats),
-                toLongArray(attributeOffsets),
-                toLongArray(attributeBufferSlots),
-                toLongArray(bindingBufferSlots),
-                toLongArray(bindingStrides),
-                toLongArray(bindingStepRates),
-                metalSlotByVertexBinding
-        );
+        return vertexDesc;
     }
 
     private static int firstAvailableVertexBufferSlot(final List<ResourceBinding> resources) {
@@ -200,47 +198,6 @@ final class MetalCompiledRenderPipeline implements CompiledRenderPipeline {
         return maxVertexBufferBinding + 1;
     }
 
-    private static void addPackedTerrainAttributes(
-            final List<Long> attributeFormats,
-            final List<Long> attributeOffsets,
-            final List<Long> attributeBufferSlots,
-            final int metalSlot
-    ) {
-        long[] formats = MetalTerrainVertexPacking.packedAttributeFormats();
-        long[] offsets = MetalTerrainVertexPacking.packedAttributeOffsets();
-        for (int i = 0; i < formats.length; i++) {
-            attributeFormats.add(formats[i]);
-            attributeOffsets.add(offsets[i]);
-            attributeBufferSlots.add((long) metalSlot);
-        }
-    }
-
-    private static void addVertexFormatAttributes(
-            final List<Long> attributeFormats,
-            final List<Long> attributeOffsets,
-            final List<Long> attributeBufferSlots,
-            final VertexFormat binding,
-            final int metalSlot
-    ) {
-        for (VertexFormatElement element : binding.getElements()) {
-            MTLVertexFormat format = MetalPipelineSupport.vertexAttributeFormat(element.format());
-            if (format.value == MTLVertexFormat.Invalid.value) {
-                throw new IllegalStateException("Unsupported vertex attribute format: " + element.format());
-            }
-            attributeFormats.add(format.value);
-            attributeOffsets.add((long) element.offset());
-            attributeBufferSlots.add((long) metalSlot);
-        }
-    }
-
-    private static long[] toLongArray(final List<Long> values) {
-        long[] result = new long[values.size()];
-        for (int i = 0; i < values.size(); i++) {
-            result[i] = values.get(i);
-        }
-        return result;
-    }
-
     @Nullable
     MemorySegment getOrCreateNativePipeline(final MetalDevice device, final long colorFormat, final long depthFormat, final long stencilFormat) {
         PipelineVariantKey key = new PipelineVariantKey(colorFormat, depthFormat, stencilFormat);
@@ -251,52 +208,67 @@ final class MetalCompiledRenderPipeline implements CompiledRenderPipeline {
 
         var colorTarget = this.info.getColorTargetState();
         var blendFunction = colorTarget.blendFunction();
-        MemorySegment created = MetalNativeBridge.INSTANCE.metallum_create_render_pipeline(
-                device.metalDeviceHandle(),
-                this.vertexMsl,
-                this.fragmentMsl,
-                this.vertexEntryPoint,
-                 this.fragmentEntryPoint,
-                colorFormat,
-                depthFormat,
-                stencilFormat,
-                this.vertexAttributeFormats,
-                this.vertexAttributeOffsets,
-                this.vertexAttributeBufferSlots,
-                this.vertexAttributeFormats.length,
-                this.vertexBindingBufferSlots,
-                this.vertexBindingStrides,
-                this.vertexBindingStepRates,
-                this.vertexBindingBufferSlots.length,
-                blendFunction.isPresent() ? 1 : 0,
-                blendFunction.map(function -> MetalPipelineSupport.toBlendFactorCode(function.color().sourceFactor()).value).orElse(0L),
-                blendFunction.map(value -> MetalPipelineSupport.toBlendFactorCode(value.color().destFactor()).value).orElse(0L),
-                blendFunction.map(blendFunction1 -> MetalPipelineSupport.toBlendOpCode(blendFunction1.color().op())).orElse(0L),
-                blendFunction.map(blendFunction2 -> MetalPipelineSupport.toBlendFactorCode(blendFunction2.alpha().sourceFactor()).value).orElse(0L),
-                blendFunction.map(blendFunction3 -> MetalPipelineSupport.toBlendFactorCode(blendFunction3.alpha().destFactor()).value).orElse(0L),
-                blendFunction.map(blendFunction4 -> MetalPipelineSupport.toBlendOpCode(blendFunction4.alpha().op())).orElse(0L),
-                colorTarget.writeMask()
-        );
-        if (MetalNativeBridge.isNullHandle(created)) {
-            return null;
-        }
 
-        this.nativePipelines.put(key, created);
-        return created;
+        try (MetalRenderPipelineDescriptor pipelineDesc = new MetalRenderPipelineDescriptor()) {
+            boolean success = pipelineDesc.setFunctions(
+                    device,
+                    this.vertexMsl,
+                    this.fragmentMsl,
+                    this.vertexEntryPoint,
+                    this.fragmentEntryPoint
+            );
+            if (!success) {
+                return null;
+            }
+
+            pipelineDesc.setVertexDescriptor(this.vertexDescriptor);
+            pipelineDesc.setAttachmentFormats(colorFormat, depthFormat, stencilFormat);
+
+            if (blendFunction.isPresent()) {
+                var function = blendFunction.get();
+                pipelineDesc.setBlendState(
+                        1,
+                        MetalPipelineSupport.toBlendFactorCode(function.color().sourceFactor()).value,
+                        MetalPipelineSupport.toBlendFactorCode(function.color().destFactor()).value,
+                        MetalPipelineSupport.toBlendOpCode(function.color().op()),
+                        MetalPipelineSupport.toBlendFactorCode(function.alpha().sourceFactor()).value,
+                        MetalPipelineSupport.toBlendFactorCode(function.alpha().destFactor()).value,
+                        MetalPipelineSupport.toBlendOpCode(function.alpha().op()),
+                        colorTarget.writeMask()
+                );
+            } else {
+                pipelineDesc.setBlendState(0, 0, 0, 0, 0, 0, 0, colorTarget.writeMask());
+            }
+
+            MemorySegment created = MetalNativeBridge.INSTANCE.metallum_MTLDevice_makeRenderPipelineState(
+                    device.metalDeviceHandle(),
+                    pipelineDesc.handle()
+            );
+
+            if (MetalNativeBridge.isNullHandle(created)) {
+                return null;
+            }
+
+            this.nativePipelines.put(key, created);
+            return created;
+        }
+    }
+
+    @Override
+    public void close() {
+        if (this.vertexDescriptor != null) {
+            this.vertexDescriptor.close();
+        }
+        for (MemorySegment nativePipeline : this.nativePipelines.values()) {
+            if (!MetalNativeBridge.isNullHandle(nativePipeline)) {
+                MetalNativeBridge.INSTANCE.metallum_release_object(nativePipeline);
+            }
+        }
+        this.nativePipelines.clear();
+        this.depthStencilState = MemorySegment.NULL;
     }
 
     private record PipelineVariantKey(long colorFormat, long depthFormat,
                                       long stencilFormat) {
-    }
-
-    private record VertexInputState(
-            long[] attributeFormats,
-            long[] attributeOffsets,
-            long[] attributeBufferSlots,
-            long[] bindingBufferSlots,
-            long[] bindingStrides,
-            long[] bindingStepRates,
-            int[] metalSlotByVertexBinding
-    ) {
     }
 }

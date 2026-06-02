@@ -2,8 +2,8 @@ package com.metallum.client.metal.render;
 
 import com.metallum.client.metal.render.bridge.MetalNativeBridge;
 import com.metallum.client.metal.render.mtl.MTLHazardTrackingMode;
-import com.metallum.client.metal.render.mtl.MTLStorageMode;
 import com.metallum.client.metal.render.mtl.MTLResourceOptions;
+import com.metallum.client.metal.render.mtl.MTLStorageMode;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import net.fabricmc.api.EnvType;

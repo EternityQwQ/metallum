@@ -95,6 +95,9 @@ public final class MTLCommandBuffer {
     }
 
     public boolean isCompleted() {
+        if (MetalNativeBridge.isNullHandle(handle)) {
+            return true;
+        }
         return MetalNativeBridge.INSTANCE.MTLCommandBuffer_isCompleted(handle()) == 1;
     }
 

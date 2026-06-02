@@ -1,6 +1,5 @@
 package com.metallum.client.metal.render.bridge;
 
-import com.metallum.client.metal.render.mtl.MTLStorageMode;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import org.jspecify.annotations.Nullable;
@@ -69,7 +68,15 @@ public final class MetalNativeBridge {
     private final MethodHandle createTextureView;
     private final MethodHandle createBufferTextureView;
     private final MethodHandle createSampler;
-    private final MethodHandle createRenderPipeline;
+    private final MethodHandle MTLVertexDescriptorCreate;
+    private final MethodHandle MTLVertexDescriptorSetAttribute;
+    private final MethodHandle MTLVertexDescriptorSetLayout;
+    private final MethodHandle MTLRenderPipelineDescriptorCreate;
+    private final MethodHandle MTLRenderPipelineDescriptorSetFunctions;
+    private final MethodHandle MTLRenderPipelineDescriptorSetVertexDescriptor;
+    private final MethodHandle MTLRenderPipelineDescriptorSetAttachmentFormats;
+    private final MethodHandle MTLRenderPipelineDescriptorSetBlendState;
+    private final MethodHandle MTLDeviceMakeRenderPipelineState;
     private final MethodHandle configureLayer;
     private final MethodHandle releaseObject;
     private final MethodHandle getBufferContents;
@@ -208,36 +215,50 @@ public final class MetalNativeBridge {
                 "metallum_create_sampler",
                 FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, LONG, LONG, LONG, LONG, INT, DOUBLE)
         );
-        this.createRenderPipeline = downcall(
+        this.MTLVertexDescriptorCreate = downcall(
                 lookup,
-                "metallum_create_render_pipeline",
-                FunctionDescriptor.of(
-                        ValueLayout.ADDRESS,
-                        ValueLayout.ADDRESS,
-                        ValueLayout.ADDRESS,
-                        ValueLayout.ADDRESS,
-                        ValueLayout.ADDRESS,
-                        ValueLayout.ADDRESS,
-                        LONG,
-                        LONG,
-                        LONG,
-                        ValueLayout.ADDRESS,
-                        ValueLayout.ADDRESS,
-                        ValueLayout.ADDRESS,
-                        LONG,
-                        ValueLayout.ADDRESS,
-                        ValueLayout.ADDRESS,
-                        ValueLayout.ADDRESS,
-                        LONG,
-                        INT,
-                        LONG,
-                        LONG,
-                        LONG,
-                        LONG,
-                        LONG,
-                        LONG,
-                        LONG
-                )
+                "metallum_MTLVertexDescriptor_create",
+                FunctionDescriptor.of(ValueLayout.ADDRESS)
+        );
+        this.MTLVertexDescriptorSetAttribute = downcall(
+                lookup,
+                "metallum_MTLVertexDescriptor_setAttribute",
+                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, LONG, LONG, LONG, LONG)
+        );
+        this.MTLVertexDescriptorSetLayout = downcall(
+                lookup,
+                "metallum_MTLVertexDescriptor_setLayout",
+                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, LONG, LONG, LONG, LONG)
+        );
+        this.MTLRenderPipelineDescriptorCreate = downcall(
+                lookup,
+                "metallum_MTLRenderPipelineDescriptor_create",
+                FunctionDescriptor.of(ValueLayout.ADDRESS)
+        );
+        this.MTLRenderPipelineDescriptorSetFunctions = downcall(
+                lookup,
+                "metallum_MTLRenderPipelineDescriptor_setFunctions",
+                FunctionDescriptor.of(INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS)
+        );
+        this.MTLRenderPipelineDescriptorSetVertexDescriptor = downcall(
+                lookup,
+                "metallum_MTLRenderPipelineDescriptor_setVertexDescriptor",
+                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS)
+        );
+        this.MTLRenderPipelineDescriptorSetAttachmentFormats = downcall(
+                lookup,
+                "metallum_MTLRenderPipelineDescriptor_setAttachmentFormats",
+                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, LONG, LONG, LONG)
+        );
+        this.MTLRenderPipelineDescriptorSetBlendState = downcall(
+                lookup,
+                "metallum_MTLRenderPipelineDescriptor_setBlendState",
+                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, INT, LONG, LONG, LONG, LONG, LONG, LONG, LONG)
+        );
+        this.MTLDeviceMakeRenderPipelineState = downcall(
+                lookup,
+                "metallum_MTLDevice_makeRenderPipelineState",
+                FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS)
         );
         this.configureLayer = downcall(lookup, "metallum_configure_layer", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, DOUBLE, DOUBLE, INT));
         this.releaseObject = downcall(lookup, "metallum_release_object", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
@@ -865,61 +886,133 @@ public final class MetalNativeBridge {
         }
     }
 
-    public MemorySegment metallum_create_render_pipeline(
+    public MemorySegment metallum_MTLVertexDescriptor_create() {
+        try {
+            return (MemorySegment) this.MTLVertexDescriptorCreate.invokeExact();
+        } catch (Throwable throwable) {
+            throw bridgeFailure("metallum_MTLVertexDescriptor_create", throwable);
+        }
+    }
+
+    public void metallum_MTLVertexDescriptor_setAttribute(
+            final MemorySegment desc,
+            final long index,
+            final long format,
+            final long offset,
+            final long bufferIndex
+    ) {
+        try {
+            this.MTLVertexDescriptorSetAttribute.invokeExact(segment(desc), index, format, offset, bufferIndex);
+        } catch (Throwable throwable) {
+            throw bridgeFailure("metallum_MTLVertexDescriptor_setAttribute", throwable);
+        }
+    }
+
+    public void metallum_MTLVertexDescriptor_setLayout(
+            final MemorySegment desc,
+            final long bufferIndex,
+            final long stride,
+            final long stepFunction,
+            final long stepRate
+    ) {
+        try {
+            this.MTLVertexDescriptorSetLayout.invokeExact(segment(desc), bufferIndex, stride, stepFunction, stepRate);
+        } catch (Throwable throwable) {
+            throw bridgeFailure("metallum_MTLVertexDescriptor_setLayout", throwable);
+        }
+    }
+
+    public MemorySegment metallum_MTLRenderPipelineDescriptor_create() {
+        try {
+            return (MemorySegment) this.MTLRenderPipelineDescriptorCreate.invokeExact();
+        } catch (Throwable throwable) {
+            throw bridgeFailure("metallum_MTLRenderPipelineDescriptor_create", throwable);
+        }
+    }
+
+    public boolean metallum_MTLRenderPipelineDescriptor_setFunctions(
+            final MemorySegment desc,
             final MemorySegment device,
-            final String vertexMsl,
-            final String fragmentMsl,
-            final String vertexEntryPoint,
-            final String fragmentEntryPoint,
-            final long colorFormat,
-            final long depthFormat,
-            final long stencilFormat,
-            final long[] vertexAttributeFormats,
-            final long[] vertexAttributeOffsets,
-            final long[] vertexAttributeBufferSlots,
-            final long vertexAttributeCount,
-            final long[] vertexBindingBufferSlots,
-            final long[] vertexBindingStrides,
-            final long[] vertexBindingStepRates,
-            final long vertexBindingCount,
-            final int blendEnabled,
-            final long blendSourceRgb,
-            final long blendDestRgb,
-            final long blendOpRgb,
-            final long blendSourceAlpha,
-            final long blendDestAlpha,
-            final long blendOpAlpha,
-            final long writeMask
+            final String vertexSource,
+            final String fragmentSource,
+            final String vertexEntry,
+            final String fragmentEntry
     ) {
         try (Arena arena = Arena.ofConfined()) {
-            return (MemorySegment) this.createRenderPipeline.invokeExact(
+            int result = (int) this.MTLRenderPipelineDescriptorSetFunctions.invokeExact(
+                    segment(desc),
                     segment(device),
-                    toCString(arena, vertexMsl),
-                    toCString(arena, fragmentMsl),
-                    toCString(arena, vertexEntryPoint),
-                    toCString(arena, fragmentEntryPoint),
-                    colorFormat,
-                    depthFormat,
-                    stencilFormat,
-                    toLongArray(arena, vertexAttributeFormats),
-                    toLongArray(arena, vertexAttributeOffsets),
-                    toLongArray(arena, vertexAttributeBufferSlots),
-                    vertexAttributeCount,
-                    toLongArray(arena, vertexBindingBufferSlots),
-                    toLongArray(arena, vertexBindingStrides),
-                    toLongArray(arena, vertexBindingStepRates),
-                    vertexBindingCount,
-                    blendEnabled,
-                    blendSourceRgb,
-                    blendDestRgb,
-                    blendOpRgb,
-                    blendSourceAlpha,
-                    blendDestAlpha,
-                    blendOpAlpha,
+                    toCString(arena, vertexSource),
+                    toCString(arena, fragmentSource),
+                    toCString(arena, vertexEntry),
+                    toCString(arena, fragmentEntry)
+            );
+            return result != 0;
+        } catch (Throwable throwable) {
+            throw bridgeFailure("metallum_MTLRenderPipelineDescriptor_setFunctions", throwable);
+        }
+    }
+
+    public void metallum_MTLRenderPipelineDescriptor_setVertexDescriptor(
+            final MemorySegment desc,
+            final MemorySegment vertexDesc
+    ) {
+        try {
+            this.MTLRenderPipelineDescriptorSetVertexDescriptor.invokeExact(segment(desc), segment(vertexDesc));
+        } catch (Throwable throwable) {
+            throw bridgeFailure("metallum_MTLRenderPipelineDescriptor_setVertexDescriptor", throwable);
+        }
+    }
+
+    public void metallum_MTLRenderPipelineDescriptor_setAttachmentFormats(
+            final MemorySegment desc,
+            final long colorFormat,
+            final long depthFormat,
+            final long stencilFormat
+    ) {
+        try {
+            this.MTLRenderPipelineDescriptorSetAttachmentFormats.invokeExact(segment(desc), colorFormat, depthFormat, stencilFormat);
+        } catch (Throwable throwable) {
+            throw bridgeFailure("metallum_MTLRenderPipelineDescriptor_setAttachmentFormats", throwable);
+        }
+    }
+
+    public void metallum_MTLRenderPipelineDescriptor_setBlendState(
+            final MemorySegment desc,
+            final int enabled,
+            final long srcRgb,
+            final long dstRgb,
+            final long opRgb,
+            final long srcAlpha,
+            final long dstAlpha,
+            final long opAlpha,
+            final long writeMask
+    ) {
+        try {
+            this.MTLRenderPipelineDescriptorSetBlendState.invokeExact(
+                    segment(desc),
+                    enabled,
+                    srcRgb,
+                    dstRgb,
+                    opRgb,
+                    srcAlpha,
+                    dstAlpha,
+                    opAlpha,
                     writeMask
             );
         } catch (Throwable throwable) {
-            throw bridgeFailure("metallum_create_render_pipeline", throwable);
+            throw bridgeFailure("metallum_MTLRenderPipelineDescriptor_setBlendState", throwable);
+        }
+    }
+
+    public MemorySegment metallum_MTLDevice_makeRenderPipelineState(
+            final MemorySegment device,
+            final MemorySegment descriptor
+    ) {
+        try {
+            return (MemorySegment) this.MTLDeviceMakeRenderPipelineState.invokeExact(segment(device), segment(descriptor));
+        } catch (Throwable throwable) {
+            throw bridgeFailure("metallum_MTLDevice_makeRenderPipelineState", throwable);
         }
     }
 
@@ -1011,17 +1104,6 @@ public final class MetalNativeBridge {
 
     private static MemorySegment toCString(final Arena arena, final String value) {
         return value == null ? MemorySegment.NULL : arena.allocateFrom(value);
-    }
-
-    private static MemorySegment toLongArray(final Arena arena, final long[] values) {
-        if (values == null || values.length == 0) {
-            return MemorySegment.NULL;
-        }
-        MemorySegment segment = arena.allocate(LONG, values.length);
-        for (int i = 0; i < values.length; i++) {
-            segment.setAtIndex(LONG, i, values[i]);
-        }
-        return segment;
     }
 
     public static boolean isNullHandle(@Nullable final MemorySegment pointer) {

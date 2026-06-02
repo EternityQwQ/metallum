@@ -146,13 +146,13 @@ final class MetalDevice implements GpuDeviceBackend {
         if (shaderSource != null) {
             this.activeShaderSource = shaderSource;
         }
-        MetalCompiledRenderPipeline compiled = MetalCrossShaderCompiler.compile(pipeline, effectiveSource);
-        this.compiledPipelines.put(pipeline, compiled);
-        return compiled;
+        return this.compiledPipelines.computeIfAbsent(pipeline, p -> MetalCrossShaderCompiler.compile(p, effectiveSource));
     }
 
     @Override
     public void clearPipelineCache() {
+        this.waitForSubmittedGpuWork();
+        this.compiledPipelines.values().forEach(MetalCompiledRenderPipeline::close);
         this.compiledPipelines.clear();
     }
 
@@ -160,6 +160,7 @@ final class MetalDevice implements GpuDeviceBackend {
     public void close() {
         this.waitForSubmittedGpuWork();
         this.commandEncoder.close();
+        this.clearPipelineCache();
         try {
             MetalNativeBridge.INSTANCE.metallum_NSView_clearLayer(this.cocoaView);
         } catch (Throwable ignored) {
@@ -196,14 +197,7 @@ final class MetalDevice implements GpuDeviceBackend {
     }
 
     MetalCompiledRenderPipeline getOrCompilePipeline(final RenderPipeline pipeline) {
-        MetalCompiledRenderPipeline cached = this.compiledPipelines.get(pipeline);
-        if (cached != null) {
-            return cached;
-        }
-
-        MetalCompiledRenderPipeline compiled = MetalCrossShaderCompiler.compile(pipeline, this.activeShaderSource);
-        this.compiledPipelines.put(pipeline, compiled);
-        return compiled;
+        return this.compiledPipelines.computeIfAbsent(pipeline, p -> MetalCrossShaderCompiler.compile(p, this.activeShaderSource));
     }
 
     private static DeviceInfo buildDeviceInfo(final String deviceName) {

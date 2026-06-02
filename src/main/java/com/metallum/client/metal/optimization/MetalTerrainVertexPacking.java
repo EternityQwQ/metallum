@@ -35,17 +35,13 @@ public final class MetalTerrainVertexPacking {
     private static final int DST_UV0_V = 18;
     private static final int DST_UV2 = 20;
 
-    private static final long METAL_VERTEX_FORMAT_FLOAT3 = MTLVertexFormat.Float3.value;
-    private static final long METAL_VERTEX_FORMAT_UCHAR4_NORMALIZED = MTLVertexFormat.UChar4Normalized.value;
-    private static final long METAL_VERTEX_FORMAT_USHORT2_NORMALIZED = MTLVertexFormat.UShort2Normalized.value;
-    private static final long METAL_VERTEX_FORMAT_SHORT2 = MTLVertexFormat.Short2.value;
-
     private static final long[] PACKED_ATTRIBUTE_FORMATS = {
-            METAL_VERTEX_FORMAT_FLOAT3,
-            METAL_VERTEX_FORMAT_UCHAR4_NORMALIZED,
-            METAL_VERTEX_FORMAT_USHORT2_NORMALIZED,
-            METAL_VERTEX_FORMAT_SHORT2
+            MTLVertexFormat.Float3.value,
+            MTLVertexFormat.UChar4Normalized.value,
+            MTLVertexFormat.UShort2Normalized.value,
+            MTLVertexFormat.Short2.value
     };
+
     private static final long[] PACKED_ATTRIBUTE_OFFSETS = {
             DST_POSITION,
             DST_COLOR,

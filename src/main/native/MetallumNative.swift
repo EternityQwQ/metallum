@@ -7,31 +7,6 @@ import simd
 private let metallumMaxVertexBufferSlot = 30
 private let metallumSharedResourceOptions: MTLResourceOptions = .storageModeShared
 
-private struct DynamicPipelineKey: Hashable {
-    let deviceAddress: UInt
-    let vertexSource: String
-    let fragmentSource: String
-    let vertexEntry: String
-    let fragmentEntry: String
-    let colorFormat: UInt
-    let depthFormat: UInt
-    let stencilFormat: UInt
-    let vertexAttributes: [UInt64]
-    let vertexOffsets: [UInt64]
-    let vertexAttributeBufferSlots: [UInt64]
-    let vertexBindingBufferSlots: [UInt64]
-    let vertexBindingStrides: [UInt64]
-    let vertexBindingStepRates: [UInt64]
-    let blendEnabled: Bool
-    let blendSourceRgb: UInt64
-    let blendDestRgb: UInt64
-    let blendOpRgb: UInt64
-    let blendSourceAlpha: UInt64
-    let blendDestAlpha: UInt64
-    let blendOpAlpha: UInt64
-    let writeMask: UInt64
-}
-
 private struct DepthStencilKey: Hashable {
     let deviceAddress: UInt
     let compareOp: UInt64
@@ -46,7 +21,6 @@ private struct PipelineVariantKey: Hashable {
 
 private enum NativeState {
     static var debugLabelsEnabled = false
-    static var dynamicPipelines: [DynamicPipelineKey: MTLRenderPipelineState] = [:]
     static var depthStencilStates: [DepthStencilKey: MTLDepthStencilState] = [:]
     static var clearPipelines: [PipelineVariantKey: MTLRenderPipelineState] = [:]
     static var presentPipeline: MTLRenderPipelineState!
@@ -424,156 +398,6 @@ private func ensureDepthStencilState(device: MTLDevice, compareOp: UInt64, write
     }
 }
 
-private func copiedArray(_ pointer: UnsafePointer<UInt64>?, count: UInt64) -> [UInt64] {
-    return withMetalAutoreleasePool {
-    guard let pointer, count > 0 else {
-        return []
-    }
-    return Array(UnsafeBufferPointer(start: pointer, count: Int(count)))
-    }
-}
-
-private func ensureDynamicPipeline(
-    device: MTLDevice,
-    vertexSource: String,
-    fragmentSource: String,
-    vertexEntry: String,
-    fragmentEntry: String,
-    colorFormat: MTLPixelFormat,
-    depthFormat: MTLPixelFormat,
-    stencilFormat: MTLPixelFormat,
-    vertexAttributeFormats: UnsafePointer<UInt64>?,
-    vertexAttributeOffsets: UnsafePointer<UInt64>?,
-    vertexAttributeBufferSlots: UnsafePointer<UInt64>?,
-    vertexAttributeCount: UInt64,
-    vertexBindingBufferSlots: UnsafePointer<UInt64>?,
-    vertexBindingStrides: UnsafePointer<UInt64>?,
-    vertexBindingStepRates: UnsafePointer<UInt64>?,
-    vertexBindingCount: UInt64,
-    blendEnabled: Bool,
-    blendSourceRgb: UInt64,
-    blendDestRgb: UInt64,
-    blendOpRgb: UInt64,
-    blendSourceAlpha: UInt64,
-    blendDestAlpha: UInt64,
-    blendOpAlpha: UInt64,
-    writeMask: UInt64
-) -> MTLRenderPipelineState? {
-    return withMetalAutoreleasePool {
-    let formats = copiedArray(vertexAttributeFormats, count: vertexAttributeCount)
-    let offsets = copiedArray(vertexAttributeOffsets, count: vertexAttributeCount)
-    let attributeBufferSlots = copiedArray(vertexAttributeBufferSlots, count: vertexAttributeCount)
-    let bindingBufferSlots = copiedArray(vertexBindingBufferSlots, count: vertexBindingCount)
-    let bindingStrides = copiedArray(vertexBindingStrides, count: vertexBindingCount)
-    let bindingStepRates = copiedArray(vertexBindingStepRates, count: vertexBindingCount)
-    guard formats.count == offsets.count,
-          formats.count == attributeBufferSlots.count,
-          bindingBufferSlots.count == bindingStrides.count,
-          bindingBufferSlots.count == bindingStepRates.count
-    else {
-        return nil
-    }
-
-    let key = DynamicPipelineKey(
-        deviceAddress: objectAddress(device),
-        vertexSource: vertexSource,
-        fragmentSource: fragmentSource,
-        vertexEntry: vertexEntry,
-        fragmentEntry: fragmentEntry,
-        colorFormat: colorFormat.rawValue,
-        depthFormat: depthFormat.rawValue,
-        stencilFormat: stencilFormat.rawValue,
-        vertexAttributes: formats,
-        vertexOffsets: offsets,
-        vertexAttributeBufferSlots: attributeBufferSlots,
-        vertexBindingBufferSlots: bindingBufferSlots,
-        vertexBindingStrides: bindingStrides,
-        vertexBindingStepRates: bindingStepRates,
-        blendEnabled: blendEnabled,
-        blendSourceRgb: blendSourceRgb,
-        blendDestRgb: blendDestRgb,
-        blendOpRgb: blendOpRgb,
-        blendSourceAlpha: blendSourceAlpha,
-        blendDestAlpha: blendDestAlpha,
-        blendOpAlpha: blendOpAlpha,
-        writeMask: writeMask
-    )
-
-    if let cached = NativeState.dynamicPipelines[key] {
-        return cached
-    }
-
-    do {
-        let vertexLibrary = try device.makeLibrary(source: vertexSource, options: nil)
-        let fragmentLibrary = try device.makeLibrary(source: fragmentSource, options: nil)
-        guard
-            let vertexFunction = vertexLibrary.makeFunction(name: vertexEntry),
-            let fragmentFunction = fragmentLibrary.makeFunction(name: fragmentEntry)
-        else {
-            NSLog("[metallum] Failed to resolve MSL entry points v='%@' f='%@'", vertexEntry, fragmentEntry)
-            return nil
-        }
-
-        let descriptor = MTLRenderPipelineDescriptor()
-
-        descriptor.vertexFunction = vertexFunction
-        descriptor.fragmentFunction = fragmentFunction
-        descriptor.colorAttachments[0].pixelFormat = colorFormat
-        descriptor.depthAttachmentPixelFormat = depthFormat
-        descriptor.stencilAttachmentPixelFormat = stencilFormat
-        descriptor.colorAttachments[0].writeMask = MTLColorWriteMask(rawValue: UInt(writeMask))
-
-        if blendEnabled {
-            descriptor.colorAttachments[0].isBlendingEnabled = true
-            descriptor.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactor(rawValue: UInt(blendSourceRgb)) ?? .one
-            descriptor.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactor(rawValue: UInt(blendDestRgb)) ?? .zero
-            descriptor.colorAttachments[0].rgbBlendOperation = blendOperation(from: blendOpRgb)
-            descriptor.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactor(rawValue: UInt(blendSourceAlpha)) ?? .one
-            descriptor.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactor(rawValue: UInt(blendDestAlpha)) ?? .zero
-            descriptor.colorAttachments[0].alphaBlendOperation = blendOperation(from: blendOpAlpha)
-        } else {
-            descriptor.colorAttachments[0].isBlendingEnabled = false
-        }
-
-        if vertexAttributeCount > 0 {
-            let vertexDescriptor = MTLVertexDescriptor()
-            for index in 0..<Int(vertexAttributeCount) {
-                let format = MTLVertexFormat(rawValue: UInt(formats[index])) ?? .invalid
-                if format == .invalid {
-                    NSLog("[metallum] Unsupported vertex attribute format code: %llu", formats[index])
-                    return nil
-                }
-                vertexDescriptor.attributes[index].format = format
-                vertexDescriptor.attributes[index].offset = Int(offsets[index])
-                vertexDescriptor.attributes[index].bufferIndex = Int(attributeBufferSlots[index])
-            }
-            for index in 0..<Int(vertexBindingCount) {
-                let bufferSlot = Int(bindingBufferSlots[index])
-                if bufferSlot < 0 || bufferSlot > metallumMaxVertexBufferSlot {
-                    NSLog("[metallum] Unsupported vertex buffer slot: %d", bufferSlot)
-                    return nil
-                }
-                vertexDescriptor.layouts[bufferSlot].stride = Int(bindingStrides[index])
-                if bindingStepRates[index] > 0 {
-                    vertexDescriptor.layouts[bufferSlot].stepFunction = .perInstance
-                    vertexDescriptor.layouts[bufferSlot].stepRate = Int(bindingStepRates[index])
-                } else {
-                    vertexDescriptor.layouts[bufferSlot].stepFunction = .perVertex
-                    vertexDescriptor.layouts[bufferSlot].stepRate = 1
-                }
-            }
-            descriptor.vertexDescriptor = vertexDescriptor
-        }
-
-        let pipeline = try device.makeRenderPipelineState(descriptor: descriptor)
-        NativeState.dynamicPipelines[key] = pipeline
-        return pipeline
-    } catch {
-        NSLog("[metallum] Failed to create dynamic render pipeline: %@", String(describing: error))
-        return nil
-    }
-    }
-}
 
 private func triangleFanOutputIndexCount(sourceCount: Int, buffer: MTLBuffer) -> Int? {
     let triangleCount = sourceCount - 2
@@ -1295,7 +1119,7 @@ public func metallum_MTLRenderCommandEncoder_setBuffer(_ encoderPtr: UnsafeMutab
         return
     }
     let buffer: MTLBuffer? = object(bufferPtr)
-    if (stageMask & 1) != 0 && index <= UInt64(metallumMaxVertexBufferSlot) {
+    if (stageMask & 1) != 0 {
         encoder.setVertexBuffer(buffer, offset: Int(offset), index: Int(index))
     }
     if (stageMask & 2) != 0 {
@@ -1568,73 +1392,7 @@ public func metallum_MTLCommandBuffer_clearColorDepthTexturesRegion(
     }
 }
 
-@_cdecl("metallum_create_render_pipeline")
-public func metallum_create_render_pipeline(
-    _ devicePtr: UnsafeMutableRawPointer?,
-    _ vertexMsl: UnsafePointer<CChar>?,
-    _ fragmentMsl: UnsafePointer<CChar>?,
-    _ vertexEntryPoint: UnsafePointer<CChar>?,
-    _ fragmentEntryPoint: UnsafePointer<CChar>?,
-    _ colorFormat: UInt64,
-    _ depthFormat: UInt64,
-    _ stencilFormat: UInt64,
-    _ vertexAttributeFormats: UnsafePointer<UInt64>?,
-    _ vertexAttributeOffsets: UnsafePointer<UInt64>?,
-    _ vertexAttributeBufferSlots: UnsafePointer<UInt64>?,
-    _ vertexAttributeCount: UInt64,
-    _ vertexBindingBufferSlots: UnsafePointer<UInt64>?,
-    _ vertexBindingStrides: UnsafePointer<UInt64>?,
-    _ vertexBindingStepRates: UnsafePointer<UInt64>?,
-    _ vertexBindingCount: UInt64,
-    _ blendEnabled: Int32,
-    _ blendSourceRgb: UInt64,
-    _ blendDestRgb: UInt64,
-    _ blendOpRgb: UInt64,
-    _ blendSourceAlpha: UInt64,
-    _ blendDestAlpha: UInt64,
-    _ blendOpAlpha: UInt64,
-    _ writeMask: UInt64
-) -> UnsafeMutableRawPointer? {
-    return withMetalAutoreleasePool {
-    guard
-        let device: MTLDevice = object(devicePtr),
-        let vertexMsl,
-        let fragmentMsl,
-        let vertexEntryPoint,
-        let fragmentEntryPoint
-    else {
-        return nil
-    }
 
-    let pipeline = ensureDynamicPipeline(
-        device: device,
-        vertexSource: String(cString: vertexMsl),
-        fragmentSource: String(cString: fragmentMsl),
-        vertexEntry: String(cString: vertexEntryPoint),
-        fragmentEntry: String(cString: fragmentEntryPoint),
-        colorFormat: MTLPixelFormat(rawValue: UInt(colorFormat)) ?? .invalid,
-        depthFormat: MTLPixelFormat(rawValue: UInt(depthFormat)) ?? .invalid,
-        stencilFormat: MTLPixelFormat(rawValue: UInt(stencilFormat)) ?? .invalid,
-        vertexAttributeFormats: vertexAttributeFormats,
-        vertexAttributeOffsets: vertexAttributeOffsets,
-        vertexAttributeBufferSlots: vertexAttributeBufferSlots,
-        vertexAttributeCount: vertexAttributeCount,
-        vertexBindingBufferSlots: vertexBindingBufferSlots,
-        vertexBindingStrides: vertexBindingStrides,
-        vertexBindingStepRates: vertexBindingStepRates,
-        vertexBindingCount: vertexBindingCount,
-        blendEnabled: blendEnabled != 0,
-        blendSourceRgb: blendSourceRgb,
-        blendDestRgb: blendDestRgb,
-        blendOpRgb: blendOpRgb,
-        blendSourceAlpha: blendSourceAlpha,
-        blendDestAlpha: blendDestAlpha,
-        blendOpAlpha: blendOpAlpha,
-        writeMask: writeMask
-    )
-    return unretainedPointer(pipeline)
-    }
-}
 
 @_cdecl("metallum_configure_layer")
 public func metallum_configure_layer(_ layerPtr: UnsafeMutableRawPointer?, _ width: Double, _ height: Double, _ immediatePresentMode: Int32) {
@@ -1788,5 +1546,174 @@ public func metallum_get_buffer_contents(_ bufferPtr: UnsafeMutableRawPointer?) 
         return nil
     }
     return buffer.contents()
+    }
+}
+
+@_cdecl("metallum_MTLVertexDescriptor_create")
+public func metallum_MTLVertexDescriptor_create() -> UnsafeMutableRawPointer? {
+    return withMetalAutoreleasePool {
+        retainedPointer(MTLVertexDescriptor())
+    }
+}
+
+@_cdecl("metallum_MTLVertexDescriptor_setAttribute")
+public func metallum_MTLVertexDescriptor_setAttribute(
+    _ descPtr: UnsafeMutableRawPointer?,
+    _ index: Int64,
+    _ format: UInt64,
+    _ offset: Int64,
+    _ bufferIndex: Int64
+) {
+    return withMetalAutoreleasePool {
+        guard let desc: MTLVertexDescriptor = object(descPtr) else { return }
+        let rawFormat = MTLVertexFormat(rawValue: UInt(format)) ?? .invalid
+        desc.attributes[Int(index)].format = rawFormat
+        desc.attributes[Int(index)].offset = Int(offset)
+        desc.attributes[Int(index)].bufferIndex = Int(bufferIndex)
+    }
+}
+
+@_cdecl("metallum_MTLVertexDescriptor_setLayout")
+public func metallum_MTLVertexDescriptor_setLayout(
+    _ descPtr: UnsafeMutableRawPointer?,
+    _ bufferIndex: Int64,
+    _ stride: Int64,
+    _ stepFunction: Int64,
+    _ stepRate: Int64
+) {
+    return withMetalAutoreleasePool {
+        guard let desc: MTLVertexDescriptor = object(descPtr) else { return }
+        desc.layouts[Int(bufferIndex)].stride = Int(stride)
+        desc.layouts[Int(bufferIndex)].stepFunction = stepFunction == 1 ? .perInstance : .perVertex
+        desc.layouts[Int(bufferIndex)].stepRate = Int(stepRate)
+    }
+}
+
+@_cdecl("metallum_MTLRenderPipelineDescriptor_create")
+public func metallum_MTLRenderPipelineDescriptor_create() -> UnsafeMutableRawPointer? {
+    return withMetalAutoreleasePool {
+        retainedPointer(MTLRenderPipelineDescriptor())
+    }
+}
+
+@_cdecl("metallum_MTLRenderPipelineDescriptor_setFunctions")
+public func metallum_MTLRenderPipelineDescriptor_setFunctions(
+    _ descPtr: UnsafeMutableRawPointer?,
+    _ devicePtr: UnsafeMutableRawPointer?,
+    _ vertexSource: UnsafePointer<CChar>?,
+    _ fragmentSource: UnsafePointer<CChar>?,
+    _ vertexEntry: UnsafePointer<CChar>?,
+    _ fragmentEntry: UnsafePointer<CChar>?
+) -> Int32 {
+    return withMetalAutoreleasePool {
+        guard
+            let desc: MTLRenderPipelineDescriptor = object(descPtr),
+            let device: MTLDevice = object(devicePtr),
+            let vertexSource,
+            let fragmentSource,
+            let vertexEntry,
+            let fragmentEntry
+        else {
+            return 0
+        }
+        do {
+            let vertexLibrary = try device.makeLibrary(source: String(cString: vertexSource), options: nil)
+            let fragmentLibrary = try device.makeLibrary(source: String(cString: fragmentSource), options: nil)
+            guard
+                let vertexFunction = vertexLibrary.makeFunction(name: String(cString: vertexEntry)),
+                let fragmentFunction = fragmentLibrary.makeFunction(name: String(cString: fragmentEntry))
+            else {
+                NSLog("[metallum] Failed to resolve MSL entry points v='%s' f='%s'", vertexEntry, fragmentEntry)
+                return 0
+            }
+            desc.vertexFunction = vertexFunction
+            desc.fragmentFunction = fragmentFunction
+            return 1
+        } catch {
+            NSLog("[metallum] Failed to compile MSL: %@", String(describing: error))
+            return 0
+        }
+    }
+}
+
+@_cdecl("metallum_MTLRenderPipelineDescriptor_setVertexDescriptor")
+public func metallum_MTLRenderPipelineDescriptor_setVertexDescriptor(
+    _ descPtr: UnsafeMutableRawPointer?,
+    _ vertexDescPtr: UnsafeMutableRawPointer?
+) {
+    return withMetalAutoreleasePool {
+        guard
+            let desc: MTLRenderPipelineDescriptor = object(descPtr),
+            let vertexDesc: MTLVertexDescriptor = object(vertexDescPtr)
+        else {
+            return
+        }
+        desc.vertexDescriptor = vertexDesc
+    }
+}
+
+@_cdecl("metallum_MTLRenderPipelineDescriptor_setAttachmentFormats")
+public func metallum_MTLRenderPipelineDescriptor_setAttachmentFormats(
+    _ descPtr: UnsafeMutableRawPointer?,
+    _ colorFormat: UInt64,
+    _ depthFormat: UInt64,
+    _ stencilFormat: UInt64
+) {
+    return withMetalAutoreleasePool {
+        guard let desc: MTLRenderPipelineDescriptor = object(descPtr) else { return }
+        desc.colorAttachments[0].pixelFormat = MTLPixelFormat(rawValue: UInt(colorFormat)) ?? .invalid
+        desc.depthAttachmentPixelFormat = MTLPixelFormat(rawValue: UInt(depthFormat)) ?? .invalid
+        desc.stencilAttachmentPixelFormat = MTLPixelFormat(rawValue: UInt(stencilFormat)) ?? .invalid
+    }
+}
+
+@_cdecl("metallum_MTLRenderPipelineDescriptor_setBlendState")
+public func metallum_MTLRenderPipelineDescriptor_setBlendState(
+    _ descPtr: UnsafeMutableRawPointer?,
+    _ enabled: Int32,
+    _ srcRgb: UInt64,
+    _ dstRgb: UInt64,
+    _ opRgb: UInt64,
+    _ srcAlpha: UInt64,
+    _ dstAlpha: UInt64,
+    _ opAlpha: UInt64,
+    _ writeMask: UInt64
+) {
+    return withMetalAutoreleasePool {
+        guard let desc: MTLRenderPipelineDescriptor = object(descPtr) else { return }
+        desc.colorAttachments[0].writeMask = MTLColorWriteMask(rawValue: UInt(writeMask))
+        if enabled != 0 {
+            desc.colorAttachments[0].isBlendingEnabled = true
+            desc.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactor(rawValue: UInt(srcRgb)) ?? .one
+            desc.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactor(rawValue: UInt(dstRgb)) ?? .zero
+            desc.colorAttachments[0].rgbBlendOperation = blendOperation(from: opRgb)
+            desc.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactor(rawValue: UInt(srcAlpha)) ?? .one
+            desc.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactor(rawValue: UInt(dstAlpha)) ?? .zero
+            desc.colorAttachments[0].alphaBlendOperation = blendOperation(from: opAlpha)
+        } else {
+            desc.colorAttachments[0].isBlendingEnabled = false
+        }
+    }
+}
+
+@_cdecl("metallum_MTLDevice_makeRenderPipelineState")
+public func metallum_MTLDevice_makeRenderPipelineState(
+    _ devicePtr: UnsafeMutableRawPointer?,
+    _ descriptorPtr: UnsafeMutableRawPointer?
+) -> UnsafeMutableRawPointer? {
+    return withMetalAutoreleasePool {
+        guard
+            let device: MTLDevice = object(devicePtr),
+            let descriptor: MTLRenderPipelineDescriptor = object(descriptorPtr)
+        else {
+            return nil
+        }
+        do {
+            let pipelineState = try device.makeRenderPipelineState(descriptor: descriptor)
+            return retainedPointer(pipelineState)
+        } catch {
+            NSLog("[metallum] Failed to create render pipeline state: %@", String(describing: error))
+            return nil
+        }
     }
 }
