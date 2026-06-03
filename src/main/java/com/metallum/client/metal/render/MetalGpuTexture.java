@@ -53,7 +53,7 @@ final class MetalGpuTexture extends GpuTexture {
     }
 
     int pixelSize() {
-        return this.getFormat().pixelSize();
+        return this.getFormat().blockSize();
     }
 
     MemorySegment nativeHandle() {

@@ -59,7 +59,6 @@ public final class MetalNativeBridge {
     private final MethodHandle MTLRenderCommandEncoderSetScissorRect;
     private final MethodHandle MTLRenderCommandEncoderDrawPrimitives;
     private final MethodHandle MTLRenderCommandEncoderDrawIndexedPrimitives;
-    private final MethodHandle MTLRenderCommandEncoderDrawPrimitivesTriangleFan;
     private final MethodHandle MTLRenderCommandEncoderDrawIndexedPrimitivesTriangleFan;
     private final MethodHandle MTLCommandBufferClearColorDepthTexturesRegion;
     private final MethodHandle MTLCommandBufferEncodePresentTextureToDrawable;
@@ -164,15 +163,10 @@ public final class MetalNativeBridge {
                 "metallum_MTLRenderCommandEncoder_drawIndexedPrimitives",
                 FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, LONG, LONG, LONG, ValueLayout.ADDRESS, LONG, LONG, LONG)
         );
-        this.MTLRenderCommandEncoderDrawPrimitivesTriangleFan = downcall(
-                lookup,
-                "metallum_MTLRenderCommandEncoder_drawPrimitivesTriangleFan",
-                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, LONG, LONG)
-        );
         this.MTLRenderCommandEncoderDrawIndexedPrimitivesTriangleFan = downcall(
                 lookup,
                 "metallum_MTLRenderCommandEncoder_drawIndexedPrimitivesTriangleFan",
-                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, LONG, LONG, LONG, LONG)
+                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, LONG, LONG, LONG, LONG, LONG)
         );
         this.MTLCommandBufferClearColorDepthTexturesRegion = downcall(
                 lookup,
@@ -801,30 +795,11 @@ public final class MetalNativeBridge {
         }
     }
 
-    public void MTLRenderCommandEncoder_drawPrimitivesTriangleFan(
-            final MemorySegment encoder,
-            final MemorySegment fanIndexBuffer,
-            final long firstVertex,
-            final long vertexCount,
-            final long instanceCount
-    ) {
-        try {
-            this.MTLRenderCommandEncoderDrawPrimitivesTriangleFan.invokeExact(
-                    segment(encoder),
-                    segment(fanIndexBuffer),
-                    firstVertex,
-                    vertexCount,
-                    instanceCount
-            );
-        } catch (Throwable throwable) {
-            throw bridgeFailure("metallum_MTLRenderCommandEncoder_drawPrimitivesTriangleFan", throwable);
-        }
-    }
-
     public void MTLRenderCommandEncoder_drawIndexedPrimitivesTriangleFan(
             final MemorySegment encoder,
             final MemorySegment indexBuffer,
             final MemorySegment fanIndexBuffer,
+            final long fanIndexBufferOffset,
             final long indexType,
             final long indexBufferOffset,
             final long indexCount,
@@ -836,6 +811,7 @@ public final class MetalNativeBridge {
                     segment(encoder),
                     segment(indexBuffer),
                     segment(fanIndexBuffer),
+                    fanIndexBufferOffset,
                     indexType,
                     indexBufferOffset,
                     indexCount,

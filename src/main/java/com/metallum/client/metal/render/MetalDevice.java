@@ -202,7 +202,7 @@ final class MetalDevice implements GpuDeviceBackend {
 
     private static DeviceInfo buildDeviceInfo(final String deviceName) {
         DeviceType type = DeviceType.INTEGRATED;
-        Set<String> underlyingExtensions = Set.of("CAMetalLayer", "MTLDevice", "Runtime MSL");
+        Set<String> underlyingExtensions = Set.of("CAMetalLayer", "MTLDevice");
         String osVersion = System.getProperty("os.version", "").trim();
         String driverDescription = "macOS " + osVersion;
         return new DeviceInfo(

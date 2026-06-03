@@ -102,6 +102,9 @@ public final class MTLCommandBuffer {
     }
 
     public boolean waitUntilCompleted(final long timeoutMs) {
+        if (MetalNativeBridge.isNullHandle(handle)) {
+            return true;
+        }
         return MetalNativeBridge.INSTANCE.MTLCommandBuffer_waitUntilCompleted(handle(), Math.max(timeoutMs, 0L)) == 0;
     }
 

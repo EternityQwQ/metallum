@@ -4,9 +4,6 @@ import Metal
 import QuartzCore
 import simd
 
-private let metallumMaxVertexBufferSlot = 30
-private let metallumSharedResourceOptions: MTLResourceOptions = .storageModeShared
-
 private struct DepthStencilKey: Hashable {
     let deviceAddress: UInt
     let compareOp: UInt64
@@ -380,37 +377,20 @@ private func ensureDepthStencilState(device: MTLDevice, compareOp: UInt64, write
 }
 
 
-private func triangleFanOutputIndexCount(sourceCount: Int, buffer: MTLBuffer) -> Int? {
+private func triangleFanOutputIndexCount(sourceCount: Int, buffer: MTLBuffer, offset: Int) -> Int? {
     let triangleCount = sourceCount - 2
     guard triangleCount <= Int.max / 3 else {
         return nil
     }
 
     let indexCount = triangleCount * 3
-    let bufferIndexCapacity = UInt64(buffer.length / MemoryLayout<UInt32>.stride)
+    let bufferIndexCapacity = UInt64((buffer.length - offset) / MemoryLayout<UInt32>.stride)
     guard indexCount <= UInt64(Int.max), indexCount <= bufferIndexCapacity else {
         return nil
     }
     return Int(indexCount)
 }
 
-private func writeSequentialTriangleFanIndices(_ indexBuffer: MTLBuffer, vertexCount: Int) -> Int? {
-    return withMetalAutoreleasePool {
-    guard vertexCount >= 3, vertexCount - 1 <= UInt64(UInt32.max), let generatedIndexCount = triangleFanOutputIndexCount(sourceCount: vertexCount, buffer: indexBuffer) else {
-        return nil
-    }
-    let triangleCount = vertexCount - 2
-    let indices = indexBuffer.contents().assumingMemoryBound(to: UInt32.self)
-    var writeIndex = 0
-    for triangle in 0..<triangleCount {
-        indices[writeIndex] = 0
-        indices[writeIndex + 1] = UInt32(triangle + 1)
-        indices[writeIndex + 2] = UInt32(triangle + 2)
-        writeIndex += 3
-    }
-    return generatedIndexCount
-    }
-}
 
 private func readIndex(_ indexBuffer: MTLBuffer, byteOffset: Int, index: Int, indexType: Int) -> UInt32 {
     let base = indexBuffer.contents().advanced(by: Int(byteOffset))
@@ -423,17 +403,18 @@ private func readIndex(_ indexBuffer: MTLBuffer, byteOffset: Int, index: Int, in
 private func writeIndexedTriangleFanIndices(
     sourceIndexBuffer: MTLBuffer,
     destinationIndexBuffer: MTLBuffer,
+    destinationOffset: Int,
     indexType: Int,
     indexOffsetBytes: Int,
     indexCount: Int
 ) -> Int? {
     return withMetalAutoreleasePool {
-    guard indexCount >= 3, let generatedIndexCount = triangleFanOutputIndexCount(sourceCount: indexCount, buffer: destinationIndexBuffer) else {
+    guard indexCount >= 3, let generatedIndexCount = triangleFanOutputIndexCount(sourceCount: indexCount, buffer: destinationIndexBuffer, offset: destinationOffset) else {
         return nil
     }
     let triangleCount = indexCount - 2
     let center = readIndex(sourceIndexBuffer, byteOffset: indexOffsetBytes, index: 0, indexType: indexType)
-    let indices = destinationIndexBuffer.contents().assumingMemoryBound(to: UInt32.self)
+    let indices = (destinationIndexBuffer.contents() + destinationOffset).assumingMemoryBound(to: UInt32.self)
     var writeIndex = 0
     for triangle in 0..<triangleCount {
         indices[writeIndex] = center
@@ -568,7 +549,6 @@ public func metallum_MTLCommandBuffer_pushDebugGroup(
     _ commandBuffer: MTLCommandBuffer,
     _ labelPtr: UnsafePointer<CChar>?
 ) {
-    guard NativeState.debugLabelsEnabled else { return }
     withMetalAutoreleasePool {
         commandBuffer.pushDebugGroup(stringFromOptionalCString(labelPtr) ?? "")
     }
@@ -576,7 +556,6 @@ public func metallum_MTLCommandBuffer_pushDebugGroup(
 
 @_cdecl("metallum_MTLCommandBuffer_popDebugGroup")
 public func metallum_MTLCommandBuffer_popDebugGroup(_ commandBuffer: MTLCommandBuffer) {
-    guard NativeState.debugLabelsEnabled else { return }
     withMetalAutoreleasePool {
         commandBuffer.popDebugGroup()
     }
@@ -1068,36 +1047,13 @@ public func metallum_MTLRenderCommandEncoder_drawIndexedPrimitives(
     }
 }
 
-@_cdecl("metallum_MTLRenderCommandEncoder_drawPrimitivesTriangleFan")
-public func metallum_MTLRenderCommandEncoder_drawPrimitivesTriangleFan(
-    _ encoder: MTLRenderCommandEncoder,
-    _ fanIndexBuffer: MTLBuffer,
-    _ firstVertex: Int,
-    _ vertexCount: Int,
-    _ instanceCount: Int
-) {
-    return withMetalAutoreleasePool {
-    guard let generatedIndexCount = writeSequentialTriangleFanIndices(fanIndexBuffer, vertexCount: vertexCount) else {
-        return
-    }
-    encoder.drawIndexedPrimitives(
-        type: .triangle,
-        indexCount: generatedIndexCount,
-        indexType: .uint32,
-        indexBuffer: fanIndexBuffer,
-        indexBufferOffset: 0,
-        instanceCount: instanceCount,
-        baseVertex: firstVertex,
-        baseInstance: 0
-    )
-    }
-}
 
 @_cdecl("metallum_MTLRenderCommandEncoder_drawIndexedPrimitivesTriangleFan")
 public func metallum_MTLRenderCommandEncoder_drawIndexedPrimitivesTriangleFan(
     _ encoder: MTLRenderCommandEncoder,
     _ indexBuffer: MTLBuffer,
     _ fanIndexBuffer: MTLBuffer,
+    _ fanIndexBufferOffset: Int,
     _ indexType: Int,
     _ indexOffsetBytes: Int,
     _ indexCount: Int,
@@ -1108,6 +1064,7 @@ public func metallum_MTLRenderCommandEncoder_drawIndexedPrimitivesTriangleFan(
     guard let generatedIndexCount = writeIndexedTriangleFanIndices(
         sourceIndexBuffer: indexBuffer,
         destinationIndexBuffer: fanIndexBuffer,
+        destinationOffset: fanIndexBufferOffset,
         indexType: indexType,
         indexOffsetBytes: indexOffsetBytes,
         indexCount: indexCount
@@ -1119,7 +1076,7 @@ public func metallum_MTLRenderCommandEncoder_drawIndexedPrimitivesTriangleFan(
         indexCount: generatedIndexCount,
         indexType: .uint32,
         indexBuffer: fanIndexBuffer,
-        indexBufferOffset: 0,
+        indexBufferOffset: fanIndexBufferOffset,
         instanceCount: instanceCount,
         baseVertex: baseVertex,
         baseInstance: 0

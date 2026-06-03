@@ -59,7 +59,7 @@ final class MetalRenderPass implements RenderPassBackend {
     private MetalCompiledRenderPipeline compiledPipeline;
     @Nullable
     private GpuBuffer indexBuffer;
-    private IndexType indexType = IndexType.SHORT;
+    private MTLIndexType indexType = MTLIndexType.UInt16;
     private MemorySegment nativePipeline = MemorySegment.NULL;
     private int pushedDebugGroups = 0;
     private boolean scissorDirty = true;
@@ -178,6 +178,10 @@ final class MetalRenderPass implements RenderPassBackend {
 
     @Override
     public void setIndexBuffer(@Nullable final GpuBuffer indexBuffer, final @NonNull IndexType indexType) {
+        setIndexBuffer(indexBuffer, MTLIndexType.from(indexType));
+    }
+
+    private void setIndexBuffer(@Nullable final GpuBuffer indexBuffer, final MTLIndexType indexType) {
         if (this.indexBuffer != indexBuffer || this.indexType != indexType) {
             this.indexBuffer = indexBuffer;
             this.indexType = indexType;
@@ -220,7 +224,7 @@ final class MetalRenderPass implements RenderPassBackend {
         MTLRenderCommandEncoder enc = renderEncoder();
 
         for (RenderPass.Draw<T> draw : draws) {
-            IndexType drawIndexType = draw.indexType() == null ? fallbackIndexType : draw.indexType();
+            MTLIndexType drawIndexType = MTLIndexType.from(draw.indexType() == null ? fallbackIndexType : draw.indexType());
             GpuBuffer currentIndexBuffer = draw.indexBuffer() == null ? defaultIndexBuffer : draw.indexBuffer();
 
             setIndexBuffer(currentIndexBuffer, drawIndexType);
@@ -258,9 +262,7 @@ final class MetalRenderPass implements RenderPassBackend {
         bindDrawState(enc);
 
         if (primitiveType.value == MetalPipelineSupport.TRIANGLE_FAN_PRIMITIVE) {
-            try (MetalGpuBuffer fanIndexBuffer = newTriangleFanBuffer(vertexCount)) {
-                enc.drawPrimitivesTriangleFan(fanIndexBuffer.nativeHandle(), firstVertex, vertexCount, Math.max(1, instanceCount));
-            }
+            drawTriangleFan(firstVertex, vertexCount, instanceCount);
         } else {
             enc.drawPrimitives(primitiveType, firstVertex, vertexCount, Math.max(1, instanceCount));
         }
@@ -358,6 +360,32 @@ final class MetalRenderPass implements RenderPassBackend {
         return MetalCommandEncoder.castBuffer(indexBuffer);
     }
 
+    private void drawTriangleFan(final int firstVertex, final int vertexCount, final int instanceCount) {
+        int triangleCount = vertexCount - 2;
+        int indexCount = triangleCount * 3;
+        MTLIndexType fanIndexType = vertexCount - 1 <= 0xFFFF ? MTLIndexType.UInt16 : MTLIndexType.UInt32;
+
+        try (GpuBufferSlice.MappedView mapped = commandEncoder.transientMemory().allocateGpuMapped((long) indexCount * fanIndexType.bytes, fanIndexType.bytes, GpuBuffer.USAGE_INDEX)) {
+            if (fanIndexType == MTLIndexType.UInt16) {
+                java.nio.ShortBuffer indices = mapped.data().asShortBuffer();
+                for (int i = 0; i < triangleCount; i++) {
+                    indices.put((short) 0);
+                    indices.put((short) (i + 1));
+                    indices.put((short) (i + 2));
+                }
+            } else {
+                java.nio.IntBuffer indices = mapped.data().asIntBuffer();
+                for (int i = 0; i < triangleCount; i++) {
+                    indices.put(0);
+                    indices.put(i + 1);
+                    indices.put(i + 2);
+                }
+            }
+            GpuBufferSlice slice = mapped.slice();
+            renderEncoder().drawIndexedPrimitives(MTLPrimitiveType.Triangle, indexCount, fanIndexType, MetalCommandEncoder.castBuffer(slice.buffer()).nativeHandle(), slice.offset(), Math.max(1, instanceCount), firstVertex);
+        }
+    }
+
     private void drawIndexedNative(
             final MTLRenderCommandEncoder enc,
             final MetalGpuBuffer nativeIndexBuffer,
@@ -365,39 +393,31 @@ final class MetalRenderPass implements RenderPassBackend {
             final int indexCount,
             final int baseVertex,
             final int instanceCount,
-            final IndexType indexType
+            final MTLIndexType indexType
     ) {
         PrimitiveTopology primitiveTopology = primitiveTopology();
         MTLPrimitiveType primitiveType = MetalPipelineSupport.primitiveTypeCode(primitiveTopology);
 
         int safeInstanceCount = Math.max(1, instanceCount);
         long indexOffsetBytes = (long) firstIndex * indexType.bytes;
-        long nativeIndexType = indexType == IndexType.INT ? 1L : 0L;
-        if (primitiveType.value == MetalPipelineSupport.TRIANGLE_FAN_PRIMITIVE)
-            try (MetalGpuBuffer fanIndexBuffer = newTriangleFanBuffer(indexCount)) {
+        if (primitiveType.value == MetalPipelineSupport.TRIANGLE_FAN_PRIMITIVE) {
+            long fanSize = Math.multiplyExact(Math.multiplyExact((long) indexCount - 2L, 3L), Integer.BYTES);
+            try (GpuBufferSlice.MappedView mapped = commandEncoder.transientMemory().allocateGpuMapped(fanSize, Integer.BYTES, GpuBuffer.USAGE_INDEX)) {
+                GpuBufferSlice slice = mapped.slice();
                 enc.drawIndexedPrimitivesTriangleFan(
                         nativeIndexBuffer.nativeHandle(),
-                        fanIndexBuffer.nativeHandle(),
-                        nativeIndexType,
+                        MetalCommandEncoder.castBuffer(slice.buffer()).nativeHandle(),
+                        slice.offset(),
+                        indexType.value,
                         indexOffsetBytes,
                         indexCount,
                         baseVertex,
                         instanceCount
                 );
             }
-        else {
-            enc.drawIndexedPrimitives(primitiveType, indexCount, nativeIndexType, nativeIndexBuffer.nativeHandle(), indexOffsetBytes, safeInstanceCount, baseVertex);
+        } else {
+            enc.drawIndexedPrimitives(primitiveType, indexCount, indexType, nativeIndexBuffer.nativeHandle(), indexOffsetBytes, safeInstanceCount, baseVertex);
         }
-    }
-
-    private MetalGpuBuffer newTriangleFanBuffer(final int sourceCount) {
-        long byteSize = Math.multiplyExact(Math.multiplyExact((long) sourceCount - 2L, 3L), Integer.BYTES);
-
-        return new MetalGpuBuffer(
-                device,
-                GpuBuffer.USAGE_MAP_WRITE | GpuBuffer.USAGE_INDEX,
-                byteSize
-        );
     }
 
     private void bindDrawState(
@@ -561,7 +581,7 @@ final class MetalRenderPass implements RenderPassBackend {
 
         MetalGpuBuffer texelBuffer = MetalCommandEncoder.castBuffer(texelSlice.buffer());
         long pixelFormat = MetalPipelineSupport.toMtlPixelFormat(texelFormat).value;
-        int pixelSize = texelFormat.pixelSize();
+        int pixelSize = texelFormat.blockSize();
         long texelByteLength = texelSlice.length();
         if (texelByteLength <= 0L || texelByteLength % pixelSize != 0L) {
             throw new IllegalStateException("Texel buffer " + binding.name() + " length " + texelByteLength + " is not a valid " + texelFormat + " range");
