@@ -81,7 +81,7 @@ public class FormatAnalyzer {
 		}
 
 		if (midUV) {
-			VERTEX_FORMAT.addAttribute("mc_midTexCoord", GpuFormat.RG16_UNORM);
+			VERTEX_FORMAT.addAttribute("mc_midTexCoord", GpuFormat.RG16_UINT);
 		}
 
 		if (midBlock) {

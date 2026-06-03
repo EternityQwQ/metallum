@@ -18,6 +18,7 @@ public class TextureUploadHelper {
 		GlStateManager._pixelStore(GL20C.GL_UNPACK_ROW_LENGTH, 0);
 		GlStateManager._pixelStore(GL20C.GL_UNPACK_SKIP_ROWS, 0);
 		GlStateManager._pixelStore(GL20C.GL_UNPACK_SKIP_PIXELS, 0);
+		GlStateManager._pixelStore(GL20C.GL_UNPACK_IMAGE_HEIGHT, 0);
 		GlStateManager._pixelStore(GL20C.GL_UNPACK_ALIGNMENT, 4);
 	}
 }

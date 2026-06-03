@@ -31,7 +31,9 @@ public enum TextureType {
 	}
 
 	public void apply(int texture, int sizeX, int sizeY, int sizeZ, int internalFormat, int format, int pixelType, ByteBuffer pixels) {
-		switch (this) {
+        TextureUploadHelper.resetTextureUploadState();
+
+        switch (this) {
 			case TEXTURE_1D:
 				IrisRenderSystem.texImage1D(texture, getGlType(), 0, internalFormat, sizeX, 0, format, pixelType, pixels);
 				break;

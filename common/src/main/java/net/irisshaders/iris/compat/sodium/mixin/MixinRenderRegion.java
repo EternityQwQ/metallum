@@ -42,24 +42,37 @@ public class MixinRenderRegion implements ShadowRenderRegion {
 	Map<TerrainRenderPass, MultiDrawBatch> shadowCachedBatches;
 
 	@Unique
+	private boolean iris$shadowRenderListActive;
+
+	@Unique
 	@Override
 	public void swapToShadowRenderList() {
+		if (this.iris$shadowRenderListActive) {
+			return;
+		}
+
 		this.regularRenderList = this.renderList;
 		this.renderList = this.shadowRenderList;
 		this.regularCachedBatches = this.cachedBatches;
 		this.cachedBatches = this.shadowCachedBatches;
 		this.shadowCachedBatches = null;
+		this.iris$shadowRenderListActive = true;
 		this.ensureRenderList();
 	}
 
 	@Unique
 	@Override
 	public void swapToRegularRenderList() {
+		if (!this.iris$shadowRenderListActive) {
+			return;
+		}
+
 		this.shadowRenderList = this.renderList;
 		this.renderList = this.regularRenderList;
 		this.shadowCachedBatches = this.cachedBatches;
 		this.cachedBatches = this.regularCachedBatches;
 		this.regularCachedBatches = null;
+		this.iris$shadowRenderListActive = false;
 		this.ensureRenderList();
 	}
 
@@ -108,6 +121,11 @@ public class MixinRenderRegion implements ShadowRenderRegion {
 				batch.clear();
 			}
 		}
+	}
+
+	@Inject(method = "clearAllCachedBatches", at = @At("HEAD"))
+	private void iris$clearAllBatches(CallbackInfo ci) {
+		this.iris$forceClearAllBatches();
 	}
 
 	@Inject(method = "clearCachedBatchFor", at = @At("HEAD"))

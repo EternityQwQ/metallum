@@ -10,7 +10,7 @@
   "iris.load.failure.shader": "The shaderpack failed to load! Please report the error to the shader developer. ",
   "iris.load.failure.generic": "Iris encountered an issue trying to load the shader; please report this to Iris developers. ",
   "iris.shaders.ssbofailure": "The shader requested a specific feature (SSBO) that is not supported by your GPU, it may not work correctly.",
-  "iris.keybind.reload": "Reload Shaders",
+  "iris.keybind.reload": "Reload Shaders (F3 + )",
   "iris.keybind.shaderPackSelection": "Shaderpack Selection Screen",
   "iris.keybind.wireframe": "Wireframe (SP only)",
   "iris.keybind.toggleShaders": "Toggle Shaders",

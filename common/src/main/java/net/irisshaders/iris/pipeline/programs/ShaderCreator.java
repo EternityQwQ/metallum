@@ -80,7 +80,7 @@ public class ShaderCreator {
                     source.getTessControlSource().orElse(null),
                     source.getTessEvalSource().orElse(null),
                     source.getFragmentSource().orElseThrow(RuntimeException::new),
-                    alpha, pipeline.getTextureMap());
+                    alpha, pipeline.getTextureMap(), false);
         } else {
             transformed = TransformPatcher.patchVanilla(
                     name,
@@ -334,7 +334,7 @@ public class ShaderCreator {
                     source.getTessControlSource().orElse(null),
                     source.getTessEvalSource().orElse(null),
                     source.getFragmentSource().orElseThrow(RuntimeException::new),
-                    alpha, pipeline.getTextureMap());
+                    alpha, pipeline.getTextureMap(), true);
         } else {
             transformed = TransformPatcher.patchVanilla(
                     name,

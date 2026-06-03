@@ -321,9 +321,10 @@ public class TransformPatcher {
 
 	public static Map<PatchShaderType, String> patchSodium(String name, String vertex, String geometry, String tessControl, String tessEval, String fragment,
 														   AlphaTest alpha,
-														   Object2ObjectMap<Tri<String, TextureType, TextureStage>, String> textureMap) {
+														   Object2ObjectMap<Tri<String, TextureType, TextureStage>, String> textureMap,
+														   boolean shadow) {
 		return transform(name, vertex, geometry, tessControl, tessEval, fragment,
-			new SodiumParameters(Patch.SODIUM, textureMap, alpha));
+			new SodiumParameters(Patch.SODIUM, textureMap, alpha, shadow));
 	}
 
 	public static Map<PatchShaderType, String> patchComposite(

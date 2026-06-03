@@ -1,5 +1,6 @@
 package net.irisshaders.iris.mixin;
 
+import com.llamalad7.mixinextras.sugar.Local;
 import com.mojang.blaze3d.opengl.GlCommandEncoder;
 import com.mojang.blaze3d.opengl.GlConst;
 import com.mojang.blaze3d.opengl.GlProgram;
@@ -11,6 +12,7 @@ import com.mojang.blaze3d.pipeline.BlendFunction;
 import com.mojang.blaze3d.pipeline.DepthStencilState;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.systems.ScissorState;
 import com.mojang.blaze3d.textures.FilterMode;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import it.unimi.dsi.fastutil.ints.IntList;
@@ -19,6 +21,7 @@ import net.irisshaders.iris.gl.blending.DepthColorStorage;
 import net.irisshaders.iris.pipeline.IrisRenderingPipeline;
 import net.irisshaders.iris.pipeline.programs.ExtendedShader;
 import net.irisshaders.iris.pipeline.programs.IrisProgram;
+import net.irisshaders.iris.shadows.ShadowRenderer;
 import net.irisshaders.iris.shadows.ShadowRenderingState;
 import net.irisshaders.iris.vertices.ImmediateState;
 import org.jetbrains.annotations.Nullable;
@@ -60,6 +63,27 @@ public class MixinGlCommandEncoder {
 			return;
 		} else {
 			GlStateManager._viewport(i, j, k, l);
+		}
+	}
+
+	@Redirect(method = "createRenderPass", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/opengl/GlStateManager;_scissorBox(IIII)V"))
+	private void changeViewport2(int i, int j, int k, int l) {
+		if (ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
+            GlStateManager._scissorBox(0, 0, ShadowRenderer.RESOLUTION, ShadowRenderer.RESOLUTION);
+            return;
+		} else {
+			GlStateManager._scissorBox(i, j, k, l);
+		}
+	}
+
+
+	@Redirect(method = "createRenderPass", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/ScissorState;enable(IIII)V"))
+	private void changeViewport3(ScissorState instance, int x, int y, int width, int height) {
+		if (ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
+            instance.enable(0, 0, ShadowRenderer.RESOLUTION, ShadowRenderer.RESOLUTION);
+            return;
+		} else {
+            instance.enable(x, y, width, height);
 		}
 	}
 
@@ -149,12 +173,12 @@ public class MixinGlCommandEncoder {
 	}
 
 	@Redirect(method = "trySetup", at = @At(value = "INVOKE", target = "Lorg/lwjgl/opengl/GL33C;glDrawBuffers([I)V"))
-	private void iris$skipShadowDrawBuffers(int[] buffers) {
-		if (ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
+	private void iris$skipShadowDrawBuffers(int[] buffers, @Local GlRenderPass glRenderPass) {
+		if (glRenderPass.pipeline.program() instanceof IrisProgram is) {
 			return;
-		}
-
-		GL33C.glDrawBuffers(buffers);
+		} else {
+            GL33C.glDrawBuffers(buffers);
+        }
 	}
 
 	@Inject(method = "trySetup", at = @At("RETURN"))

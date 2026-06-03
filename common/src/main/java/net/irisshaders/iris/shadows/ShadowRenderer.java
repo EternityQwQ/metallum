@@ -412,7 +412,8 @@ public class ShadowRenderer {
 		// Create our camera
 		PoseStack modelView = createShadowModelView(this.sunPathRotation, this.intervalSize, nearPlane, farPlane);
 		MODELVIEW = new Matrix4f(modelView.last().pose());
-		Matrix4f x = new Matrix4f(levelRenderState.cameraRenderState.viewRotationMatrix);
+		Matrix4f cameraViewRotation = new Matrix4f(levelRenderState.cameraRenderState.viewRotationMatrix);
+		Matrix4f cameraProjection = new Matrix4f(levelRenderState.cameraRenderState.projectionMatrix);
 		levelRenderState.cameraRenderState.viewRotationMatrix = MODELVIEW;
 
 		RenderSystem.getModelViewStack().pushMatrix();
@@ -637,7 +638,8 @@ public class ShadowRenderer {
 		visibleBlockEntities = null;
 		ACTIVE = false;
 
-		levelRenderState.cameraRenderState.viewRotationMatrix = x;
+		levelRenderState.cameraRenderState.viewRotationMatrix = cameraViewRotation;
+		levelRenderState.cameraRenderState.projectionMatrix = cameraProjection;
 
 		RenderSystem.getModelViewStack().popMatrix();
 

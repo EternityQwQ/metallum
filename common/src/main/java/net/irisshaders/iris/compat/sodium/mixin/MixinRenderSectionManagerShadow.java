@@ -8,8 +8,11 @@ import net.caffeinemc.mods.sodium.client.render.chunk.RenderSectionManager;
 import net.caffeinemc.mods.sodium.client.render.chunk.data.BuiltSectionInfo;
 import net.caffeinemc.mods.sodium.client.render.chunk.lists.DeferredTaskList;
 import net.caffeinemc.mods.sodium.client.render.chunk.lists.SortedRenderLists;
+import net.caffeinemc.mods.sodium.client.render.chunk.occlusion.SectionTree;
+import net.caffeinemc.mods.sodium.client.render.chunk.region.RenderRegion;
 import net.caffeinemc.mods.sodium.client.render.chunk.region.RenderRegionManager;
 import net.caffeinemc.mods.sodium.client.render.chunk.translucent_sorting.SortBehavior;
+import net.caffeinemc.mods.sodium.client.render.chunk.translucent_sorting.trigger.CameraMovement;
 import net.caffeinemc.mods.sodium.client.render.viewport.Viewport;
 import net.caffeinemc.mods.sodium.client.util.FogParameters;
 import net.irisshaders.iris.mixinterface.ShadowRenderListAccess;
@@ -50,13 +53,21 @@ public abstract class MixinRenderSectionManagerShadow implements ShadowRenderLis
 	@Final
 	private RenderRegionManager regions;
 
-	@Shadow(remap = false)
+    @Unique
+    private SectionTree regularTree;
+
+
+    @Unique
+    private SectionTree shadowTree;
+
+    @Shadow(remap = false)
 	private void renderOutOfGraph(Viewport viewport, FogParameters fogParameters) {
 		throw new AssertionError();
 	}
 
     @Shadow private MappableRingBuffer uniformData;
     @Shadow private int uboUpdateFrame;
+    @Shadow private SectionTree renderTree;
     @Unique
 	private @NotNull SortedRenderLists shadowRenderLists = SortedRenderLists.empty();
 
@@ -141,7 +152,9 @@ public abstract class MixinRenderSectionManagerShadow implements ShadowRenderLis
 			this.shadowScopeActive = true;
             this.regularUbo = this.uniformData;
             this.regularUboUpdated = this.uboUpdateFrame;
-		}
+            this.regularTree = this.renderTree;
+            this.renderTree = this.shadowTree;
+        }
 
 		this.iris$swapToShadowRenderLists();
 		this.renderLists = this.shadowRenderLists;
@@ -158,12 +171,14 @@ public abstract class MixinRenderSectionManagerShadow implements ShadowRenderLis
 
 		if (this.shadowScopeActive) {
 			this.renderLists = this.regularRenderLists;
+            this.renderTree = this.regularTree;
 			this.taskLists = this.regularTaskLists;
 			this.needsRenderListUpdate = this.regularNeedsRenderListUpdate;
 			this.needsGraphUpdate = this.regularNeedsGraphUpdate;
 			this.cameraChanged = this.regularCameraChanged;
 			this.shadowScopeActive = false;
             this.uniformData = this.regularUbo;
+            this.shadowUboUpdated = this.uboUpdateFrame;
             this.uboUpdateFrame = this.regularUboUpdated;
 		}
 	}
@@ -193,6 +208,17 @@ public abstract class MixinRenderSectionManagerShadow implements ShadowRenderLis
 		this.shadowNeedsRenderListUpdate = true;
 	}
 
+	@Redirect(method = "onSectionAdded", at = @At(value = "INVOKE", target = "Lnet/caffeinemc/mods/sodium/client/render/chunk/region/RenderRegionManager;createForChunk(III)Lnet/caffeinemc/mods/sodium/client/render/chunk/region/RenderRegion;"), remap = false)
+	private RenderRegion createRegionForCurrentRenderListState(RenderRegionManager regions, int x, int y, int z) {
+		RenderRegion region = regions.createForChunk(x, y, z);
+
+		if (this.renderListStateIsShadow) {
+			((ShadowRenderRegion) region).swapToShadowRenderList();
+		}
+
+		return region;
+	}
+
 	@Inject(method = "prepareRenderTrees", at = @At("HEAD"), cancellable = true, remap = false)
 	private void skipAsyncCullDuringShadow(Camera camera, Viewport viewport, FogParameters fogParameters, boolean spectator, CallbackInfo ci) {
 		if (ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
@@ -209,6 +235,13 @@ public abstract class MixinRenderSectionManagerShadow implements ShadowRenderLis
 
 	@Inject(method = "processChunkBuilds", at = @At("HEAD"), cancellable = true, remap = false)
 	private void skipChunkBuildProcessingDuringShadow(Viewport viewport, CallbackInfo ci) {
+		if (ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
+			ci.cancel();
+		}
+	}
+
+	@Inject(method = "processGFNIMovement", at = @At("HEAD"), cancellable = true, remap = false)
+	private void skipTranslucentSortingDuringShadow(CameraMovement movement, CallbackInfo ci) {
 		if (ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
 			ci.cancel();
 		}

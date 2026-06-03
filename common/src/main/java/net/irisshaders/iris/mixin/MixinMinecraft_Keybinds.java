@@ -1,6 +1,7 @@
 package net.irisshaders.iris.mixin;
 
 import net.irisshaders.iris.Iris;
+import net.irisshaders.iris.IrisVKOnly;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.profiling.Profiler;
 import net.minecraft.util.profiling.ProfilerFiller;

@@ -7,6 +7,7 @@ import com.mojang.blaze3d.opengl.GlProgram;
 import com.mojang.blaze3d.opengl.GlTexture;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.opengl.GlStateManager;
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.VertexFormat;
@@ -897,9 +898,7 @@ public class IrisRenderingPipeline implements WorldRenderingPipeline, ShaderRend
 				}
 			} else {
 				// Clear depth first, regardless of any color clearing.
-				shadowRenderTargets.getDepthSourceFb().bind();
-				GlStateManager._depthMask(true);
-				GlStateManager._clear(GL21C.GL_DEPTH_BUFFER_BIT);
+                RenderSystem.getDevice().createCommandEncoder().clearDepthTexture(shadowRenderTargets.getDepthTexture(), 0.0f);
 
 				ImmutableList<ClearPass> passes;
 

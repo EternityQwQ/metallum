@@ -98,18 +98,7 @@ public class SodiumTransformer {
 		} else {
 		}
 
-		root.replaceReferenceExpressions(t, "gl_ModelViewProjectionMatrix",
-			"(u_ProjectionMatrix * u_ModelViewMatrix)");
-
-		CommonTransformer.applyIntelHd4000Workaround(root);
-	}
-
-	public static void injectVertInit(
-		ASTParser t,
-		TranslationUnit tree,
-		Root root,
-		SodiumParameters parameters, boolean needsNormal) {
-		tree.parseAndInjectNodes(t, ASTInjectionPoint.BEFORE_DECLARATIONS,"""
+        tree.parseAndInjectNode(t, ASTInjectionPoint.BEFORE_DECLARATIONS, """
                         layout(std140) uniform u_Globals {
                               mat4 u_ProjectionMatrix;
                               mat4 u_ModelViewMatrix;
@@ -123,7 +112,27 @@ public class SodiumTransformer {
                         
                               float u_FadePeriodInv;
                               bool u_UseRGSS;
-                          };""",
+                          };""");
+
+		root.replaceReferenceExpressions(t, "gl_ModelViewProjectionMatrix",
+			"(u_ProjectionMatrix * u_ModelViewMatrix)");
+
+		CommonTransformer.applyIntelHd4000Workaround(root);
+	}
+
+	public static void injectVertInit(
+		ASTParser t,
+		TranslationUnit tree,
+		Root root,
+		SodiumParameters parameters, boolean needsNormal) {
+		String chunkFadeDeclaration = parameters.shadow ? "const float mc_chunkFade = -1.0;" : "float mc_chunkFade;";
+		String chunkFadeSetup = parameters.shadow ? "" :
+			"int chunkId = int(_draw_id);" +
+				"int chunkFade = texelFetch(u_SectionTimeInfo, int((u_RegionID * 256u) + uint(chunkId))).r;" +
+				"float fade = clamp(float(u_CurrentTime - chunkFade) * u_FadePeriodInv, 0.0, 1.0);" +
+				"mc_chunkFade = (chunkFade < 0) ? 1.0 : fade;";
+
+		tree.parseAndInjectNodes(t, ASTInjectionPoint.BEFORE_DECLARATIONS,
                 "uniform vec3 u_RegionOffset;",
                 "uniform int u_CurrentTime;",
                 "uniform uint u_RegionID;",
@@ -144,7 +153,7 @@ public class SodiumTransformer {
 
 			"const float VERTEX_SCALE = 32.0 / POSITION_MAX_COORD;",
 			"const float VERTEX_OFFSET = -8.0;",
-			"float mc_chunkFade;",
+			chunkFadeDeclaration,
 			"uint _draw_id;",
 			"vec3 irs_Normal;",
 			"vec4 irs_Tangent;",
@@ -226,10 +235,8 @@ vec4 decode_diamond_tangent_with_sign(vec3 normal, int qByte, bool signPositive)
 				(needsNormal ? "irs_Normal = decodeOct24(iris_Normal);" : "") +
 				(needsNormal ? "irs_Tangent = decode_diamond_tangent_with_sign(irs_Normal, (int(iris_Normal >> 24u)), (a_LightAndData.z & 1u) != 0u);" : "") +
 				"_draw_id = a_LightAndData[3];" +
-				"int chunkId = int(_draw_id);" +
-				"int chunkFade = texelFetch(u_SectionTimeInfo, int((u_RegionID * 256u) + uint(chunkId))).r;" +
-				"float fade = clamp(float(u_CurrentTime - chunkFade) * u_FadePeriodInv, 0.0, 1.0);" +
-				"mc_chunkFade = (chunkFade < 0) ? 1.0 : fade; }",
+				chunkFadeSetup +
+				"}",
 
 			"uvec3 _get_relative_chunk_coord(uint pos) {\n" +
 				"    // Packing scheme is defined by LocalSectionIndex\n" +
@@ -340,21 +347,21 @@ vec4 decode_diamond_tangent_with_sign(vec3 normal, int qByte, bool signPositive)
 			case BOOL:
 				return;
 			case FLOAT32:
-				tree.parseAndInjectNode(t, ASTInjectionPoint.BEFORE_DECLARATIONS, "float iris_MidTex = (mc_midTexCoord.x * " + textureScale + ");");
+				tree.parseAndInjectNode(t, ASTInjectionPoint.BEFORE_DECLARATIONS, "float iris_MidTex = (float(mc_midTexCoord.x) * " + textureScale + ");");
 				break;
 			case F32VEC2:
-				tree.parseAndInjectNode(t, ASTInjectionPoint.BEFORE_DECLARATIONS, "vec2 iris_MidTex = (mc_midTexCoord.xy * " + textureScale + ").xy;");
+				tree.parseAndInjectNode(t, ASTInjectionPoint.BEFORE_DECLARATIONS, "vec2 iris_MidTex = (vec2(mc_midTexCoord.xy) * " + textureScale + ").xy;");
 				break;
 			case F32VEC3:
-				tree.parseAndInjectNode(t, ASTInjectionPoint.BEFORE_DECLARATIONS, "vec3 iris_MidTex = vec3(mc_midTexCoord.xy * " + textureScale + ", 0.0);");
+				tree.parseAndInjectNode(t, ASTInjectionPoint.BEFORE_DECLARATIONS, "vec3 iris_MidTex = vec3(vec2(mc_midTexCoord.xy) * " + textureScale + ", 0.0);");
 				break;
 			case F32VEC4:
-				tree.parseAndInjectNode(t, ASTInjectionPoint.BEFORE_DECLARATIONS, "vec4 iris_MidTex = vec4(mc_midTexCoord.xy * " + textureScale + ", 0.0, 1.0);");
+				tree.parseAndInjectNode(t, ASTInjectionPoint.BEFORE_DECLARATIONS, "vec4 iris_MidTex = vec4(vec2(mc_midTexCoord.xy) * " + textureScale + ", 0.0, 1.0);");
 				break;
 			default:
 				throw new IllegalStateException("Somehow got a midTexCoord that is *above* 4 dimensions???");
 		}
 
-		tree.parseAndInjectNode(t, ASTInjectionPoint.BEFORE_DECLARATIONS, "in vec2 mc_midTexCoord;");
+		tree.parseAndInjectNode(t, ASTInjectionPoint.BEFORE_DECLARATIONS, "in uvec2 mc_midTexCoord;");
 	}
 }
