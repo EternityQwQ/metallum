@@ -7,6 +7,7 @@ import com.mojang.blaze3d.systems.RenderPassBackend;
 import com.mojang.blaze3d.systems.RenderPassDescriptor;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
+import net.irisshaders.iris.Iris;
 import org.joml.Vector4fc;
 import org.jspecify.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
@@ -19,18 +20,21 @@ import java.util.function.Supplier;
 public class UndoReverseZFive {
 	@WrapMethod(method = "clearColorAndDepthTextures(Lcom/mojang/blaze3d/textures/GpuTexture;Lorg/joml/Vector4fc;Lcom/mojang/blaze3d/textures/GpuTexture;D)V")
 	private void iris$change(GpuTexture colorTexture, Vector4fc clearColor, GpuTexture depthTexture, double clearDepth, Operation<Void> original) {
-		original.call(colorTexture, clearColor, depthTexture, 1.0 - clearDepth);
+		original.call(colorTexture, clearColor, depthTexture, Iris.isPackInUseQuick() ? 1.0 - clearDepth : clearDepth);
 	}
 	@WrapMethod(method = "clearColorAndDepthTextures(Lcom/mojang/blaze3d/textures/GpuTexture;Lorg/joml/Vector4fc;Lcom/mojang/blaze3d/textures/GpuTexture;DIIII)V")
 	private void iris$change3(GpuTexture colorTexture, Vector4fc clearColor, GpuTexture depthTexture, double clearDepth, int regionX, int regionY, int regionWidth, int regionHeight, Operation<Void> original) {
-		original.call(colorTexture, clearColor, depthTexture, 1.0 - clearDepth, regionX, regionY, regionWidth, regionHeight);
+		original.call(colorTexture, clearColor, depthTexture, Iris.isPackInUseQuick() ? 1.0 - clearDepth : clearDepth, regionX, regionY, regionWidth, regionHeight);
 	}
 	@WrapMethod(method = "clearDepthTexture")
 	private void iris$change2(GpuTexture depthTexture, double clearDepth, Operation<Void> original) {
-		original.call(depthTexture, 1.0 - clearDepth);
+		original.call(depthTexture, Iris.isPackInUseQuick() ? 1.0 - clearDepth : clearDepth);
 	}
 	@WrapMethod(method = "createRenderPass")
 	private RenderPassBackend iris$change4(RenderPassDescriptor descriptor, Operation<RenderPassBackend> original) {
+        if (!Iris.isPackInUseQuick()) {
+            return original.call(descriptor);
+        }
 		return original.call(descriptor.depthAttachment() != null && descriptor.depthAttachment().clearValue().isPresent() ? descriptor.withDepthAttachment(descriptor.depthAttachment().textureView(), OptionalDouble.of(1.0 - descriptor.depthAttachment.clearValue().getAsDouble())) : descriptor);
 	}
 }

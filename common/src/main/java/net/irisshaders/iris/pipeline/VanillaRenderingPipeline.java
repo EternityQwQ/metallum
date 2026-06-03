@@ -19,6 +19,8 @@ import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.debug.DebugScreenDisplayer;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
+import org.lwjgl.opengl.ARBClipControl;
+import org.lwjgl.opengl.GL;
 
 import java.util.List;
 import java.util.OptionalInt;
@@ -37,6 +39,9 @@ public class VanillaRenderingPipeline implements WorldRenderingPipeline {
 
 	@Override
 	public void beginLevelRendering() {
+        if (GL.getCapabilities().GL_ARB_clip_control) {
+            ARBClipControl.glClipControl(ARBClipControl.GL_LOWER_LEFT, ARBClipControl.GL_ZERO_TO_ONE);
+        }
 		// Use the default Minecraft framebuffer and ensure that no programs are in use
 		GlStateManager._glUseProgram(0);
 	}

@@ -107,11 +107,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3d;
 import org.joml.Vector4f;
-import org.lwjgl.opengl.GL15C;
-import org.lwjgl.opengl.GL20C;
-import org.lwjgl.opengl.GL21C;
-import org.lwjgl.opengl.GL30C;
-import org.lwjgl.opengl.GL43C;
+import org.lwjgl.opengl.*;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -868,6 +864,9 @@ public class IrisRenderingPipeline implements WorldRenderingPipeline, ShaderRend
 
 	@Override
 	public void beginLevelRendering() {
+        if (GL.getCapabilities().GL_ARB_clip_control) {
+            ARBClipControl.glClipControl(ARBClipControl.GL_LOWER_LEFT, ARBClipControl.GL_NEGATIVE_ONE_TO_ONE);
+        }
 		isRenderingWorld = true;
 
 		if (!initializedBlockIds) {
