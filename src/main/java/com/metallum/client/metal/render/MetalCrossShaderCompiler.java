@@ -56,7 +56,16 @@ final class MetalCrossShaderCompiler {
 
             String vertexEntryPoint = extractEntryPoint(vertexMsl, VERTEX_ENTRY_PATTERN, "main0");
             String fragmentEntryPoint = extractEntryPoint(fragmentMsl, FRAGMENT_ENTRY_PATTERN, "main0");
-            List<MetalCompiledRenderPipeline.ResourceBinding> resources = buildResourceBindings(layoutEntries, vertexMsl, fragmentMsl);
+            List<MetalCompiledRenderPipeline.ResourceBinding> resources = new ArrayList<>(buildResourceBindings(layoutEntries, vertexMsl, fragmentMsl));
+            if (pipeline.getLocation().getNamespace().contains("sodium")) {
+                resources.add(new MetalCompiledRenderPipeline.ResourceBinding(
+                        MetalCompiledRenderPipeline.ResourceKind.UNIFORM_BUFFER,
+                        "push_constants",
+                        20,
+                        MetalCompiledRenderPipeline.STAGE_ALL,
+                        null
+                ));
+            }
             return new MetalCompiledRenderPipeline(
                     device,
                     pipeline,
@@ -226,6 +235,20 @@ final class MetalCrossShaderCompiler {
                         "spvc_compiler_options_set_bool(FLIP_VERTEX_Y)"
                 );
                 checkSpvc(Spvc.spvc_compiler_install_compiler_options(compiler, options), "spvc_compiler_install_compiler_options");
+
+                PointerBuffer pResources = stack.mallocPointer(1);
+                checkSpvc(Spvc.spvc_compiler_create_shader_resources(compiler, pResources), "spvc_compiler_create_shader_resources");
+                long resources = pResources.get(0);
+
+                PointerBuffer pList = stack.mallocPointer(1);
+                PointerBuffer pCount = stack.mallocPointer(1);
+                checkSpvc(Spvc.spvc_resources_get_resource_list_for_type(resources, Spvc.SPVC_RESOURCE_TYPE_PUSH_CONSTANT, pList, pCount), "spvc_resources_get_resource_list_for_type");
+                long count = pCount.get(0);
+                if (count > 0) {
+                    org.lwjgl.util.spvc.SpvcReflectedResource.Buffer list = org.lwjgl.util.spvc.SpvcReflectedResource.create(pList.get(0), (int)count);
+                    int id = list.get(0).id();
+                    Spvc.spvc_compiler_set_decoration(compiler, id, org.lwjgl.util.spvc.Spv.SpvDecorationBinding, 20);
+                }
 
                 PointerBuffer pSource = stack.mallocPointer(1);
                 checkSpvc(Spvc.spvc_compiler_compile(compiler, pSource), "spvc_compiler_compile");

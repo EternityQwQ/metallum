@@ -14,7 +14,10 @@
     "optimization.SectionRenderDispatcherMixin",
     "optimization.accessor.MeshDataAccessor",
     "optimization.accessor.SectionCompilerResultsAccessor",
-    "render.PreferredGraphicsApiMixin"
+    "render.PreferredGraphicsApiMixin",
+    "sodium.DrawBackendMixin",
+    "sodium.DrawContextMixin",
+    "sodium.MultiDrawBatchMixin"
   ],
   "injectors": {
     "defaultRequire": 1

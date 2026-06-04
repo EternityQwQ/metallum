@@ -194,12 +194,35 @@ final class MetalRenderPass implements RenderPassBackend {
 
     @Override
     public void multiDrawIndexed(@NonNull IntBuffer drawParameters, int instanceCount, int firstInstance, int drawCount) {
-        throw new UnsupportedOperationException();
+        MetalGpuBuffer nativeIndexBuffer = resolveIndexBuffer();
+        MTLRenderCommandEncoder enc = renderEncoder();
+        bindDrawState(enc);
+
+        for (int i = 0; i < drawCount; i++) {
+            int firstIndex = drawParameters.get(i * 3);
+            int indexCount = drawParameters.get(i * 3 + 1);
+            int baseVertex = drawParameters.get(i * 3 + 2);
+            if (indexCount > 0) {
+                drawIndexedNative(enc, nativeIndexBuffer, firstIndex, indexCount, baseVertex, instanceCount, indexType);
+            }
+        }
     }
 
     @Override
     public void multiDrawIndexed(@NonNull PointerBuffer firstIndexOffsets, @NonNull IntBuffer indexCounts, @NonNull IntBuffer vertexOffsets, int drawCount) {
-        throw new UnsupportedOperationException();
+        MetalGpuBuffer nativeIndexBuffer = resolveIndexBuffer();
+        MTLRenderCommandEncoder enc = renderEncoder();
+        bindDrawState(enc);
+
+        for (int i = 0; i < drawCount; i++) {
+            long firstIndexOffset = firstIndexOffsets.get(i);
+            int indexCount = indexCounts.get(i);
+            int baseVertex = vertexOffsets.get(i);
+            if (indexCount > 0) {
+                int firstIndex = Math.toIntExact(firstIndexOffset / indexType.bytes);
+                drawIndexedNative(enc, nativeIndexBuffer, firstIndex, indexCount, baseVertex, 1, indexType);
+            }
+        }
     }
 
     @Override
@@ -317,6 +340,10 @@ final class MetalRenderPass implements RenderPassBackend {
                 clearDepthEnabled,
                 clearDepthValue
         );
+    }
+
+    GpuBufferSlice.MappedView allocateTransient(final long size, final long alignment, @GpuBuffer.Usage final int usage) {
+        return commandEncoder.transientMemory().allocateGpuMapped(size, alignment, usage);
     }
 
     void end() {
