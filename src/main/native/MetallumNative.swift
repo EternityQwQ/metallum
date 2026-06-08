@@ -1002,7 +1002,7 @@ public func metallum_MTLRenderCommandEncoder_drawIndexedPrimitives(
     _ encoder: MTLRenderCommandEncoder,
     _ primitiveType: MTLPrimitiveType,
     _ indexCount: Int,
-    _ indexType: Int,
+    _ indexType: MTLIndexType,
     _ indexBuffer: MTLBuffer,
     _ indexBufferOffset: Int,
     _ instanceCount: Int,
@@ -1012,13 +1012,45 @@ public func metallum_MTLRenderCommandEncoder_drawIndexedPrimitives(
     encoder.drawIndexedPrimitives(
         type: primitiveType,
         indexCount: indexCount,
-        indexType: indexType == 0 ? .uint16 : .uint32,
+        indexType: indexType,
         indexBuffer: indexBuffer,
         indexBufferOffset: indexBufferOffset,
         instanceCount: instanceCount,
         baseVertex: baseVertex,
         baseInstance: 0
     )
+    }
+}
+
+
+@_cdecl("metallum_MTLRenderCommandEncoder_multiDrawIndexed")
+public func metallum_MTLRenderCommandEncoder_multiDrawIndexed(
+    _ encoder: MTLRenderCommandEncoder,
+    _ primitiveType: MTLPrimitiveType,
+    _ indexType: MTLIndexType,
+    _ indexBuffer: MTLBuffer,
+    _ firstIndexOffsets: UnsafePointer<Int>,
+    _ indexCounts: UnsafePointer<Int32>,
+    _ vertexOffsets: UnsafePointer<Int32>,
+    _ drawCount: Int,
+    _ instanceCount: Int
+) {
+    withMetalAutoreleasePool {
+        for i in 0..<drawCount {
+            let indexCount = Int(indexCounts[i])
+            if indexCount > 0 {
+                encoder.drawIndexedPrimitives(
+                    type: primitiveType,
+                    indexCount: indexCount,
+                    indexType: indexType,
+                    indexBuffer: indexBuffer,
+                    indexBufferOffset: firstIndexOffsets[i],
+                    instanceCount: instanceCount,
+                    baseVertex: Int(vertexOffsets[i]),
+                    baseInstance: 0
+                )
+            }
+        }
     }
 }
 

@@ -45,7 +45,7 @@ final class MetalCommandEncoder implements CommandEncoderBackend {
     MetalCommandEncoder(final MetalDevice device) {
         this.device = device;
         this.transientMemory = new MetalTransientMemory(device, this);
-        fence = MetalNativeBridge.INSTANCE.metallum_create_fence(device.metalDeviceHandle());
+        fence = MetalNativeBridge.metallum_create_fence(device.metalDeviceHandle());
         if (MetalNativeBridge.isNullHandle(fence)) {
             throw new IllegalStateException("Failed to allocate MTLFence");
         }

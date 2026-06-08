@@ -35,7 +35,7 @@ final class MetalGpuTexture extends GpuTexture {
         this.device = device;
         this.mtlPixelFormat = MTLPixelFormat.from(format);
 
-        this.nativeHandle = MetalNativeBridge.INSTANCE.metallum_create_texture_2d(
+        this.nativeHandle = MetalNativeBridge.metallum_create_texture_2d(
                 device.metalDeviceHandle(),
                 this.mtlPixelFormat.value,
                 width,

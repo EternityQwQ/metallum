@@ -32,7 +32,7 @@ final class MetalGpuSampler extends GpuSampler {
             final OptionalDouble maxLod
     ) {
         this.device = device;
-        this.nativeHandle = MetalNativeBridge.INSTANCE.metallum_create_sampler(
+        this.nativeHandle = MetalNativeBridge.metallum_create_sampler(
                 device.metalDeviceHandle(),
                 toMtlAddressMode(addressModeU),
                 toMtlAddressMode(addressModeV),

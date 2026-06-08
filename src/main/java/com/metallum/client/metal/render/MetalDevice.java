@@ -53,9 +53,9 @@ final class MetalDevice implements GpuDeviceBackend {
         this.metalDeviceHandle = metalDeviceHandle;
         this.metalLayer = metalLayer;
         this.cocoaView = cocoaView;
-        MetalNativeBridge.INSTANCE.metallum_set_debug_labels_enabled(this.useLabels());
+        MetalNativeBridge.metallum_set_debug_labels_enabled(this.useLabels());
         this.commandQueue = MTLCommandQueue.create(metalDeviceHandle);
-        MetalNativeBridge.INSTANCE.metallum_init_pipelines(metalDeviceHandle);
+        MetalNativeBridge.metallum_init_pipelines(metalDeviceHandle);
         this.commandEncoder = new MetalCommandEncoder(this);
         this.deviceInfo = buildDeviceInfo(deviceName);
     }
@@ -168,11 +168,11 @@ final class MetalDevice implements GpuDeviceBackend {
         this.commandEncoder.close();
         this.clearPipelineCache();
         try {
-            MetalNativeBridge.INSTANCE.metallum_NSView_clearLayer(this.cocoaView);
+            MetalNativeBridge.metallum_NSView_clearLayer(this.cocoaView);
         } catch (Throwable ignored) {
         }
         this.commandQueue.close();
-        MetalNativeBridge.INSTANCE.metallum_release_object(this.metalDeviceHandle);
+        MetalNativeBridge.metallum_release_object(this.metalDeviceHandle);
     }
 
     @Override
@@ -199,7 +199,7 @@ final class MetalDevice implements GpuDeviceBackend {
     }
 
     void queueResourceRelease(final MemorySegment handle) {
-        this.commandEncoder.queueForDestroy(() -> MetalNativeBridge.INSTANCE.metallum_release_object(handle));
+        this.commandEncoder.queueForDestroy(() -> MetalNativeBridge.metallum_release_object(handle));
     }
 
     MetalCompiledRenderPipeline getOrCompilePipeline(final RenderPipeline pipeline) {

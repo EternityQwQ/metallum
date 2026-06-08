@@ -15,7 +15,7 @@ public final class MTLCommandBuffer {
     }
 
     public MTLBlitCommandEncoder makeBlitCommandEncoder() {
-        MemorySegment encoder = MetalNativeBridge.INSTANCE.MTLCommandBuffer_makeBlitCommandEncoder(handle());
+        MemorySegment encoder = MetalNativeBridge.MTLCommandBuffer_makeBlitCommandEncoder(handle());
         if (MetalNativeBridge.isNullHandle(encoder)) {
             throw new IllegalStateException("Failed to create MTLBlitCommandEncoder");
         }
@@ -35,7 +35,7 @@ public final class MTLCommandBuffer {
             final int clearDepthEnabled,
             final double clearDepth
     ) {
-        MemorySegment encoder = MetalNativeBridge.INSTANCE.MTLCommandBuffer_makeRenderCommandEncoder(
+        MemorySegment encoder = MetalNativeBridge.MTLCommandBuffer_makeRenderCommandEncoder(
                 handle(),
                 colorTexture,
                 depthTexture,
@@ -69,7 +69,7 @@ public final class MTLCommandBuffer {
             final int regionHeight,
             final MemorySegment globalFence
     ) {
-        MetalNativeBridge.INSTANCE.MTLCommandBuffer_clearColorDepthTexturesRegion(
+        MetalNativeBridge.MTLCommandBuffer_clearColorDepthTexturesRegion(
                 handle(),
                 colorTexture,
                 clearColorRed,
@@ -87,40 +87,40 @@ public final class MTLCommandBuffer {
     }
 
     public void encodePresentTextureToDrawable(final MemorySegment layer, final MemorySegment sourceTexture, final MemorySegment globalFence) {
-        MetalNativeBridge.INSTANCE.MTLCommandBuffer_encodePresentTextureToDrawable(handle(), layer, sourceTexture, globalFence);
+        MetalNativeBridge.MTLCommandBuffer_encodePresentTextureToDrawable(handle(), layer, sourceTexture, globalFence);
     }
 
     public void commit() {
-        MetalNativeBridge.INSTANCE.MTLCommandBuffer_commit(handle());
+        MetalNativeBridge.MTLCommandBuffer_commit(handle());
     }
 
     public boolean isCompleted() {
         if (MetalNativeBridge.isNullHandle(handle)) {
             return true;
         }
-        return MetalNativeBridge.INSTANCE.MTLCommandBuffer_isCompleted(handle()) == 1;
+        return MetalNativeBridge.MTLCommandBuffer_isCompleted(handle()) == 1;
     }
 
     public boolean waitUntilCompleted(final long timeoutMs) {
         if (MetalNativeBridge.isNullHandle(handle)) {
             return true;
         }
-        return MetalNativeBridge.INSTANCE.MTLCommandBuffer_waitUntilCompleted(handle(), Math.max(timeoutMs, 0L)) == 0;
+        return MetalNativeBridge.MTLCommandBuffer_waitUntilCompleted(handle(), Math.max(timeoutMs, 0L)) == 0;
     }
 
     public void pushDebugGroup(final String label) {
-        MetalNativeBridge.INSTANCE.MTLCommandBuffer_pushDebugGroup(handle(), label);
+        MetalNativeBridge.MTLCommandBuffer_pushDebugGroup(handle(), label);
     }
 
     public void popDebugGroup() {
-        MetalNativeBridge.INSTANCE.MTLCommandBuffer_popDebugGroup(handle());
+        MetalNativeBridge.MTLCommandBuffer_popDebugGroup(handle());
     }
 
     public void close() {
         if (MetalNativeBridge.isNullHandle(handle)) {
             return;
         }
-        MetalNativeBridge.INSTANCE.metallum_release_object(handle);
+        MetalNativeBridge.metallum_release_object(handle);
         handle = MemorySegment.NULL;
     }
 

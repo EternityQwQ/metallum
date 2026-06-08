@@ -14,62 +14,62 @@ public final class MTLRenderCommandEncoder extends MTLCommandEncoder {
     }
 
     public void setRenderPipelineState(final MemorySegment pipeline) {
-        MetalNativeBridge.INSTANCE.MTLRenderCommandEncoder_setRenderPipelineState(handle(), pipeline);
+        MetalNativeBridge.MTLRenderCommandEncoder_setRenderPipelineState(handle(), pipeline);
     }
 
     public void setDepthStencilState(final MemorySegment depthStencilState) {
-        MetalNativeBridge.INSTANCE.MTLRenderCommandEncoder_setDepthStencilState(handle(), depthStencilState);
+        MetalNativeBridge.MTLRenderCommandEncoder_setDepthStencilState(handle(), depthStencilState);
     }
 
     public void setDepthBias(final float depthBias, final float slopeScale, final float clamp) {
-        MetalNativeBridge.INSTANCE.MTLRenderCommandEncoder_setDepthBias(handle(), depthBias, slopeScale, clamp);
+        MetalNativeBridge.MTLRenderCommandEncoder_setDepthBias(handle(), depthBias, slopeScale, clamp);
     }
 
     public void setFrontFacingWinding(final MTLWinding winding) {
-        MetalNativeBridge.INSTANCE.MTLRenderCommandEncoder_setFrontFacingWinding(handle(), winding.value);
+        MetalNativeBridge.MTLRenderCommandEncoder_setFrontFacingWinding(handle(), winding.value);
     }
 
     public void setCullMode(final MTLCullMode cullMode) {
-        MetalNativeBridge.INSTANCE.MTLRenderCommandEncoder_setCullMode(handle(), cullMode.value);
+        MetalNativeBridge.MTLRenderCommandEncoder_setCullMode(handle(), cullMode.value);
     }
 
     public void setTriangleFillMode(final MTLTriangleFillMode fillMode) {
-        MetalNativeBridge.INSTANCE.MTLRenderCommandEncoder_setTriangleFillMode(handle(), fillMode.value);
+        MetalNativeBridge.MTLRenderCommandEncoder_setTriangleFillMode(handle(), fillMode.value);
     }
 
     public void setBuffer(final MemorySegment buffer, final long offset, final long index, final int stageMask) {
-        MetalNativeBridge.INSTANCE.MTLRenderCommandEncoder_setBuffer(handle(), buffer, offset, index, stageMask);
+        MetalNativeBridge.MTLRenderCommandEncoder_setBuffer(handle(), buffer, offset, index, stageMask);
     }
 
     public void setTexture(final MemorySegment texture, final long index, final int stageMask) {
-        MetalNativeBridge.INSTANCE.MTLRenderCommandEncoder_setTexture(handle(), texture, index, stageMask);
+        MetalNativeBridge.MTLRenderCommandEncoder_setTexture(handle(), texture, index, stageMask);
     }
 
     public void setTextureAndSampler(final MemorySegment texture, final MemorySegment sampler, final long index, final int stageMask) {
-        MetalNativeBridge.INSTANCE.MTLRenderCommandEncoder_setTextureAndSampler(handle(), texture, sampler, index, stageMask);
+        MetalNativeBridge.MTLRenderCommandEncoder_setTextureAndSampler(handle(), texture, sampler, index, stageMask);
     }
 
     public void setScissorRect(final long x, final long y, final long width, final long height) {
-        MetalNativeBridge.INSTANCE.MTLRenderCommandEncoder_setScissorRect(handle(), x, y, width, height);
+        MetalNativeBridge.MTLRenderCommandEncoder_setScissorRect(handle(), x, y, width, height);
     }
 
     public void drawPrimitives(final MTLPrimitiveType primitiveType, final int firstVertex, final int vertexCount, final int instanceCount) {
-        MetalNativeBridge.INSTANCE.MTLRenderCommandEncoder_drawPrimitives(handle(), primitiveType.value, firstVertex, vertexCount, instanceCount);
+        MetalNativeBridge.MTLRenderCommandEncoder_drawPrimitives(handle(), primitiveType.value, firstVertex, vertexCount, instanceCount);
     }
 
     public void drawIndexedPrimitives(final MTLPrimitiveType primitiveType, final int indexCount, final MTLIndexType indexType, final MemorySegment indexBuffer, final long offset, final int instanceCount, final int baseVertex) {
-        MetalNativeBridge.INSTANCE.MTLRenderCommandEncoder_drawIndexedPrimitives(handle(), primitiveType.value, indexCount, indexType.value, indexBuffer, offset, instanceCount, baseVertex);
+        MetalNativeBridge.MTLRenderCommandEncoder_drawIndexedPrimitives(handle(), primitiveType.value, indexCount, indexType.value, indexBuffer, offset, instanceCount, baseVertex);
     }
 
     public void drawIndexedPrimitivesTriangleFan(final MemorySegment indexBuffer, final MemorySegment fanIndexBuffer, final long fanIndexBufferOffset, final long indexType, final long offset, final int indexCount, final int baseVertex, final int instanceCount) {
-        MetalNativeBridge.INSTANCE.MTLRenderCommandEncoder_drawIndexedPrimitivesTriangleFan(handle(), indexBuffer, fanIndexBuffer, fanIndexBufferOffset, indexType, offset, indexCount, baseVertex, instanceCount);
+        MetalNativeBridge.MTLRenderCommandEncoder_drawIndexedPrimitivesTriangleFan(handle(), indexBuffer, fanIndexBuffer, fanIndexBufferOffset, indexType, offset, indexCount, baseVertex, instanceCount);
     }
 
     public void updateFence(final MemorySegment fence, final MTLRenderStages stages) {
-        MetalNativeBridge.INSTANCE.MTLRenderCommandEncoder_updateFence(handle(), fence, stages.value);
+        MetalNativeBridge.MTLRenderCommandEncoder_updateFence(handle(), fence, stages.value);
     }
 
     public void waitForFence(final MemorySegment fence, final MTLRenderStages stages) {
-        MetalNativeBridge.INSTANCE.MTLRenderCommandEncoder_waitForFence(handle(), fence, stages.value);
+        MetalNativeBridge.MTLRenderCommandEncoder_waitForFence(handle(), fence, stages.value);
     }
 }

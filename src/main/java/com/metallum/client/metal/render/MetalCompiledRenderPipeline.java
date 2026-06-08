@@ -82,7 +82,7 @@ final class MetalCompiledRenderPipeline implements CompiledRenderPipeline, AutoC
             this.depthBiasConstant = depthStencilState.depthBiasConstant();
         }
 
-        this.depthStencilState = MetalNativeBridge.INSTANCE.MTLDevice_makeDepthStencilState(
+        this.depthStencilState = MetalNativeBridge.MTLDevice_makeDepthStencilState(
                 device.metalDeviceHandle(),
                 depthCompareOp,
                 depthWrite
@@ -145,7 +145,7 @@ final class MetalCompiledRenderPipeline implements CompiledRenderPipeline, AutoC
                 pipelineDesc.disableBlending(colorTarget.writeMask());
             }
 
-            return MetalNativeBridge.INSTANCE.metallum_MTLDevice_makeRenderPipelineState(
+            return MetalNativeBridge.metallum_MTLDevice_makeRenderPipelineState(
                     device.metalDeviceHandle(),
                     pipelineDesc.handle()
             );
@@ -260,10 +260,10 @@ final class MetalCompiledRenderPipeline implements CompiledRenderPipeline, AutoC
     @Override
     public void close() {
         if (!MetalNativeBridge.isNullHandle(this.withDepthPipeline)) {
-            MetalNativeBridge.INSTANCE.metallum_release_object(this.withDepthPipeline);
+            MetalNativeBridge.metallum_release_object(this.withDepthPipeline);
         }
         if (!MetalNativeBridge.isNullHandle(this.withoutDepthPipeline)) {
-            MetalNativeBridge.INSTANCE.metallum_release_object(this.withoutDepthPipeline);
+            MetalNativeBridge.metallum_release_object(this.withoutDepthPipeline);
         }
     }
 }

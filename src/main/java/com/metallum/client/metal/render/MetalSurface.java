@@ -34,7 +34,7 @@ final class MetalSurface implements GpuSurfaceBackend {
             throw new SurfaceException("Metal surface configuration must be positive, got " + config.width() + "x" + config.height());
         }
 
-        MetalNativeBridge.INSTANCE.metallum_configure_layer(
+        MetalNativeBridge.metallum_configure_layer(
                 this.metalLayer,
                 config.width(),
                 config.height(),

@@ -209,19 +209,26 @@ final class MetalRenderPass implements RenderPassBackend {
 
     @Override
     public void multiDrawIndexed(@NonNull PointerBuffer firstIndexOffsets, @NonNull IntBuffer indexCounts, @NonNull IntBuffer vertexOffsets, int drawCount) {
+        MTLPrimitiveType primitiveType = primitiveTopology();
+        if (primitiveType == MTLPrimitiveType.TriangleFan){
+            throw new UnsupportedOperationException("Metal backend does not support triangle fan multiDrawIndexed");
+        }
+
         MetalGpuBuffer nativeIndexBuffer = resolveIndexBuffer();
         MTLRenderCommandEncoder enc = renderEncoder();
         bindDrawState(enc);
 
-        for (int i = 0; i < drawCount; i++) {
-            long firstIndexOffset = firstIndexOffsets.get(i);
-            int indexCount = indexCounts.get(i);
-            int baseVertex = vertexOffsets.get(i);
-            if (indexCount > 0) {
-                int firstIndex = Math.toIntExact(firstIndexOffset / indexType.bytes);
-                drawIndexedNative(enc, nativeIndexBuffer, firstIndex, indexCount, baseVertex, 1, indexType);
-            }
-        }
+        MetalNativeBridge.MTLRenderCommandEncoder_multiDrawIndexed(
+                enc.handle(),
+                primitiveType.value,
+                indexType.value,
+                nativeIndexBuffer.nativeHandle(),
+                MemorySegment.ofAddress(org.lwjgl.system.MemoryUtil.memAddress(firstIndexOffsets)),
+                MemorySegment.ofAddress(org.lwjgl.system.MemoryUtil.memAddress(indexCounts)),
+                MemorySegment.ofAddress(org.lwjgl.system.MemoryUtil.memAddress(vertexOffsets)),
+                drawCount,
+                1L
+        );
     }
 
     @Override
@@ -414,7 +421,6 @@ final class MetalRenderPass implements RenderPassBackend {
     ) {
         MTLPrimitiveType primitiveType = primitiveTopology();
 
-        int safeInstanceCount = Math.max(1, instanceCount);
         long indexOffsetBytes = (long) firstIndex * indexType.bytes;
         if (primitiveType == MTLPrimitiveType.TriangleFan) {
             long fanSize = Math.multiplyExact(Math.multiplyExact((long) indexCount - 2L, 3L), Integer.BYTES);
@@ -432,7 +438,7 @@ final class MetalRenderPass implements RenderPassBackend {
                 );
             }
         } else {
-            enc.drawIndexedPrimitives(primitiveType, indexCount, indexType, nativeIndexBuffer.nativeHandle(), indexOffsetBytes, safeInstanceCount, baseVertex);
+            enc.drawIndexedPrimitives(primitiveType, indexCount, indexType, nativeIndexBuffer.nativeHandle(), indexOffsetBytes, instanceCount, baseVertex);
         }
     }
 
@@ -598,7 +604,7 @@ final class MetalRenderPass implements RenderPassBackend {
             throw new IllegalStateException("Texel buffer " + binding.name() + " length " + texelByteLength + " is not a valid " + texelFormat + " range");
         }
         long texelCount = texelByteLength / pixelSize;
-        MemorySegment texelTexture = MetalNativeBridge.INSTANCE.metallum_create_buffer_texture_view(
+        MemorySegment texelTexture = MetalNativeBridge.metallum_create_buffer_texture_view(
                 texelBuffer.nativeHandle(),
                 pixelFormat,
                 texelSlice.offset(),
@@ -612,7 +618,7 @@ final class MetalRenderPass implements RenderPassBackend {
 
         enc.setTexture(texelTexture, binding.bindingIndex(), binding.stageMask());
 
-        commandEncoder.queueForDestroy(() -> MetalNativeBridge.INSTANCE.metallum_release_object(texelTexture));
+        commandEncoder.queueForDestroy(() -> MetalNativeBridge.metallum_release_object(texelTexture));
     }
 
     record TextureViewAndSampler(GpuTextureView textureView, GpuSampler sampler) {

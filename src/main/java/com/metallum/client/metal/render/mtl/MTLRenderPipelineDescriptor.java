@@ -9,7 +9,7 @@ public final class MTLRenderPipelineDescriptor implements AutoCloseable {
     private boolean closed;
 
     public MTLRenderPipelineDescriptor() {
-        this.handle = MetalNativeBridge.INSTANCE.metallum_MTLRenderPipelineDescriptor_create();
+        this.handle = MetalNativeBridge.metallum_MTLRenderPipelineDescriptor_create();
     }
 
     public MemorySegment handle() {
@@ -23,7 +23,7 @@ public final class MTLRenderPipelineDescriptor implements AutoCloseable {
             final String vertexEntry,
             final String fragmentEntry
     ) {
-        return MetalNativeBridge.INSTANCE.metallum_MTLRenderPipelineDescriptor_setFunctions(
+        return MetalNativeBridge.metallum_MTLRenderPipelineDescriptor_setFunctions(
                 this.handle,
                 deviceHandle,
                 vertexSource,
@@ -34,14 +34,14 @@ public final class MTLRenderPipelineDescriptor implements AutoCloseable {
     }
 
     public void setVertexDescriptor(final MTLVertexDescriptor vertexDescriptor) {
-        MetalNativeBridge.INSTANCE.metallum_MTLRenderPipelineDescriptor_setVertexDescriptor(
+        MetalNativeBridge.metallum_MTLRenderPipelineDescriptor_setVertexDescriptor(
                 this.handle,
                 vertexDescriptor.handle()
         );
     }
 
     public void setAttachmentFormats(final MTLPixelFormat colorFormat, final MTLPixelFormat depthFormat, final MTLPixelFormat stencilFormat) {
-        MetalNativeBridge.INSTANCE.metallum_MTLRenderPipelineDescriptor_setAttachmentFormats(
+        MetalNativeBridge.metallum_MTLRenderPipelineDescriptor_setAttachmentFormats(
                 this.handle,
                 colorFormat,
                 depthFormat,
@@ -58,7 +58,7 @@ public final class MTLRenderPipelineDescriptor implements AutoCloseable {
             final MTLBlendOperation alphaBlendOperation,
             final long writeMask
     ) {
-        MetalNativeBridge.INSTANCE.metallum_MTLRenderPipelineDescriptor_setBlendState(
+        MetalNativeBridge.metallum_MTLRenderPipelineDescriptor_setBlendState(
                 this.handle,
                 1,
                 sourceColorBlendFactor.value,
@@ -72,7 +72,7 @@ public final class MTLRenderPipelineDescriptor implements AutoCloseable {
     }
 
     public void disableBlending(final long writeMask) {
-        MetalNativeBridge.INSTANCE.metallum_MTLRenderPipelineDescriptor_setBlendState(
+        MetalNativeBridge.metallum_MTLRenderPipelineDescriptor_setBlendState(
                 this.handle,
                 0,
                 0, 0, 0, 0, 0, 0,
@@ -84,7 +84,7 @@ public final class MTLRenderPipelineDescriptor implements AutoCloseable {
     public void close() {
         if (!this.closed) {
             this.closed = true;
-            MetalNativeBridge.INSTANCE.metallum_release_object(this.handle);
+            MetalNativeBridge.metallum_release_object(this.handle);
         }
     }
 }

@@ -24,249 +24,7 @@ public final class MetalNativeBridge {
     private static final ValueLayout.OfDouble DOUBLE = ValueLayout.JAVA_DOUBLE;
     private static final Linker LINKER = Linker.nativeLinker();
 
-    public static final MetalNativeBridge INSTANCE = loadNative();
-
-    private final Arena libraryArena;
-    private final MethodHandle createSystemDefaultDevice;
-    private final MethodHandle copyDeviceName;
-    private final MethodHandle NSWindowBackingScaleFactor;
-    private final MethodHandle createMetalLayer;
-    private final MethodHandle NSViewSetMetalLayer;
-    private final MethodHandle NSViewClearLayer;
-    private final MethodHandle setDebugLabelsEnabled;
-    private final MethodHandle MTLDeviceMakeCommandQueue;
-    private final MethodHandle MTLCommandQueueMakeCommandBuffer;
-    private final MethodHandle MTLCommandBufferCommit;
-    private final MethodHandle MTLCommandBufferIsCompleted;
-    private final MethodHandle MTLCommandBufferWaitUntilCompleted;
-    private final MethodHandle MTLCommandBufferPushDebugGroup;
-    private final MethodHandle MTLCommandBufferPopDebugGroup;
-    private final MethodHandle MTLCommandBufferMakeBlitCommandEncoder;
-    private final MethodHandle MTLCommandEncoderEndEncoding;
-    private final MethodHandle MTLBlitCommandEncoderCopyFromBufferToBuffer;
-    private final MethodHandle MTLBlitCommandEncoderCopyFromBufferToTexture;
-    private final MethodHandle MTLBlitCommandEncoderCopyFromTextureToTexture;
-    private final MethodHandle MTLBlitCommandEncoderCopyFromTextureToBuffer;
-    private final MethodHandle MTLDeviceMakeDepthStencilState;
-    private final MethodHandle MTLCommandBufferMakeRenderCommandEncoder;
-    private final MethodHandle MTLRenderCommandEncoderSetRenderPipelineState;
-    private final MethodHandle MTLRenderCommandEncoderSetDepthStencilState;
-    private final MethodHandle MTLRenderCommandEncoderSetDepthBias;
-    private final MethodHandle MTLRenderCommandEncoderSetFrontFacingWinding;
-    private final MethodHandle MTLRenderCommandEncoderSetCullMode;
-    private final MethodHandle MTLRenderCommandEncoderSetTriangleFillMode;
-    private final MethodHandle MTLRenderCommandEncoderSetBuffer;
-    private final MethodHandle MTLRenderCommandEncoderSetTexture;
-    private final MethodHandle MTLRenderCommandEncoderSetTextureAndSampler;
-    private final MethodHandle MTLRenderCommandEncoderSetScissorRect;
-    private final MethodHandle MTLRenderCommandEncoderDrawPrimitives;
-    private final MethodHandle MTLRenderCommandEncoderDrawIndexedPrimitives;
-    private final MethodHandle MTLRenderCommandEncoderDrawIndexedPrimitivesTriangleFan;
-    private final MethodHandle MTLCommandBufferClearColorDepthTexturesRegion;
-    private final MethodHandle MTLCommandBufferEncodePresentTextureToDrawable;
-    private final MethodHandle createBuffer;
-    private final MethodHandle createTexture2d;
-    private final MethodHandle createTextureView;
-    private final MethodHandle createBufferTextureView;
-    private final MethodHandle createSampler;
-    private final MethodHandle MTLVertexDescriptorCreate;
-    private final MethodHandle MTLVertexDescriptorSetAttribute;
-    private final MethodHandle MTLVertexDescriptorSetLayout;
-    private final MethodHandle MTLRenderPipelineDescriptorCreate;
-    private final MethodHandle MTLRenderPipelineDescriptorSetFunctions;
-    private final MethodHandle MTLRenderPipelineDescriptorSetVertexDescriptor;
-    private final MethodHandle MTLRenderPipelineDescriptorSetAttachmentFormats;
-    private final MethodHandle MTLRenderPipelineDescriptorSetBlendState;
-    private final MethodHandle MTLDeviceMakeRenderPipelineState;
-    private final MethodHandle configureLayer;
-    private final MethodHandle releaseObject;
-    private final MethodHandle getBufferContents;
-    private final MethodHandle createFence;
-    private final MethodHandle MTLRenderCommandEncoderUpdateFence;
-    private final MethodHandle MTLRenderCommandEncoderWaitForFence;
-    private final MethodHandle MTLBlitCommandEncoderUpdateFence;
-    private final MethodHandle MTLBlitCommandEncoderWaitForFence;
-    private final MethodHandle initPipelines;
-
-
-    private MetalNativeBridge(final Arena libraryArena, final SymbolLookup lookup) {
-        this.libraryArena = libraryArena;
-        this.createSystemDefaultDevice = downcall(lookup, "metallum_create_system_default_device", FunctionDescriptor.of(ValueLayout.ADDRESS));
-        this.copyDeviceName = downcall(lookup, "metallum_copy_device_name", FunctionDescriptor.of(INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG));
-        this.NSWindowBackingScaleFactor = downcall(lookup, "metallum_NSWindow_backingScaleFactor", FunctionDescriptor.of(DOUBLE, ValueLayout.ADDRESS));
-        this.createMetalLayer = downcall(lookup, "metallum_create_metal_layer", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, DOUBLE));
-        this.NSViewSetMetalLayer = downcall(lookup, "metallum_NSView_setMetalLayer", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
-        this.NSViewClearLayer = downcall(lookup, "metallum_NSView_clearLayer", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
-        this.setDebugLabelsEnabled = downcall(lookup, "metallum_set_debug_labels_enabled", FunctionDescriptor.ofVoid(INT));
-        this.initPipelines = downcall(lookup, "metallum_init_pipelines", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
-
-        this.MTLDeviceMakeCommandQueue = downcall(lookup, "metallum_MTLDevice_makeCommandQueue", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
-        this.MTLCommandQueueMakeCommandBuffer = downcall(lookup, "metallum_MTLCommandQueue_makeCommandBuffer", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS));
-        this.MTLCommandBufferCommit = downcall(lookup, "metallum_MTLCommandBuffer_commit", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
-        this.MTLCommandBufferIsCompleted = downcall(lookup, "metallum_MTLCommandBuffer_isCompleted", FunctionDescriptor.of(INT, ValueLayout.ADDRESS));
-        this.MTLCommandBufferWaitUntilCompleted = downcall(lookup, "metallum_MTLCommandBuffer_waitUntilCompleted", FunctionDescriptor.of(INT, ValueLayout.ADDRESS, LONG));
-        this.MTLCommandBufferPushDebugGroup = downcall(lookup, "metallum_MTLCommandBuffer_pushDebugGroup", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
-        this.MTLCommandBufferPopDebugGroup = downcall(lookup, "metallum_MTLCommandBuffer_popDebugGroup", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
-        this.MTLCommandBufferMakeBlitCommandEncoder = downcall(lookup, "metallum_MTLCommandBuffer_makeBlitCommandEncoder", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
-        this.MTLCommandEncoderEndEncoding = downcall(lookup, "metallum_MTLCommandEncoder_endEncoding", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
-        this.MTLBlitCommandEncoderCopyFromBufferToBuffer = downcall(
-                lookup,
-                "metallum_MTLBlitCommandEncoder_copyFromBufferToBuffer",
-                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, ValueLayout.ADDRESS, LONG, LONG)
-        );
-        this.MTLBlitCommandEncoderCopyFromBufferToTexture = downcall(
-                lookup,
-                "metallum_MTLBlitCommandEncoder_copyFromBufferToTexture",
-                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, ValueLayout.ADDRESS, LONG, LONG, LONG, LONG, LONG, LONG, LONG, LONG)
-        );
-        this.MTLBlitCommandEncoderCopyFromTextureToTexture = downcall(
-                lookup,
-                "metallum_MTLBlitCommandEncoder_copyFromTextureToTexture",
-                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, LONG, LONG, LONG, LONG, LONG, LONG)
-        );
-        this.MTLBlitCommandEncoderCopyFromTextureToBuffer = downcall(
-                lookup,
-                "metallum_MTLBlitCommandEncoder_copyFromTextureToBuffer",
-                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, LONG, LONG, LONG, LONG, LONG, LONG, LONG, LONG)
-        );
-        this.MTLDeviceMakeDepthStencilState = downcall(lookup, "metallum_MTLDevice_makeDepthStencilState", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, INT));
-        this.MTLCommandBufferMakeRenderCommandEncoder = downcall(
-                lookup,
-                "metallum_MTLCommandBuffer_makeRenderCommandEncoder",
-                FunctionDescriptor.of(
-                        ValueLayout.ADDRESS,
-                        ValueLayout.ADDRESS,
-                        ValueLayout.ADDRESS,
-                        ValueLayout.ADDRESS,
-                        DOUBLE,
-                        DOUBLE,
-                        INT,
-                        FLOAT,
-                        FLOAT,
-                        FLOAT,
-                        FLOAT,
-                        INT,
-                        DOUBLE
-                )
-        );
-        this.MTLRenderCommandEncoderSetRenderPipelineState = downcall(lookup, "metallum_MTLRenderCommandEncoder_setRenderPipelineState", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
-        this.MTLRenderCommandEncoderSetDepthStencilState = downcall(lookup, "metallum_MTLRenderCommandEncoder_setDepthStencilState", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
-        this.MTLRenderCommandEncoderSetDepthBias = downcall(lookup, "metallum_MTLRenderCommandEncoder_setDepthBias", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, FLOAT, FLOAT, FLOAT));
-        this.MTLRenderCommandEncoderSetFrontFacingWinding = downcall(lookup, "metallum_MTLRenderCommandEncoder_setFrontFacingWinding", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, INT));
-        this.MTLRenderCommandEncoderSetCullMode = downcall(lookup, "metallum_MTLRenderCommandEncoder_setCullMode", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, LONG));
-        this.MTLRenderCommandEncoderSetTriangleFillMode = downcall(lookup, "metallum_MTLRenderCommandEncoder_setTriangleFillMode", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, INT));
-        this.MTLRenderCommandEncoderSetBuffer = downcall(lookup, "metallum_MTLRenderCommandEncoder_setBuffer", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, LONG, INT));
-        this.MTLRenderCommandEncoderSetTexture = downcall(lookup, "metallum_MTLRenderCommandEncoder_setTexture", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, INT));
-        this.MTLRenderCommandEncoderSetTextureAndSampler = downcall(lookup, "metallum_MTLRenderCommandEncoder_setTextureAndSampler", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, INT));
-        this.MTLRenderCommandEncoderSetScissorRect = downcall(lookup, "metallum_MTLRenderCommandEncoder_setScissorRect", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, LONG, LONG, LONG, LONG));
-        this.MTLRenderCommandEncoderDrawPrimitives = downcall(lookup, "metallum_MTLRenderCommandEncoder_drawPrimitives", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, LONG, LONG, LONG, LONG));
-        this.MTLRenderCommandEncoderDrawIndexedPrimitives = downcall(
-                lookup,
-                "metallum_MTLRenderCommandEncoder_drawIndexedPrimitives",
-                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, LONG, LONG, LONG, ValueLayout.ADDRESS, LONG, LONG, LONG)
-        );
-        this.MTLRenderCommandEncoderDrawIndexedPrimitivesTriangleFan = downcall(
-                lookup,
-                "metallum_MTLRenderCommandEncoder_drawIndexedPrimitivesTriangleFan",
-                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, LONG, LONG, LONG, LONG, LONG)
-        );
-        this.MTLCommandBufferClearColorDepthTexturesRegion = downcall(
-                lookup,
-                "metallum_MTLCommandBuffer_clearColorDepthTexturesRegion",
-                FunctionDescriptor.ofVoid(
-                        ValueLayout.ADDRESS,
-                        ValueLayout.ADDRESS,
-                        FLOAT,
-                        FLOAT,
-                        FLOAT,
-                        FLOAT,
-                        ValueLayout.ADDRESS,
-                        DOUBLE,
-                        INT,
-                        INT,
-                        INT,
-                        INT,
-                        ValueLayout.ADDRESS
-                )
-        );
-        this.MTLCommandBufferEncodePresentTextureToDrawable = downcall(
-                lookup,
-                "metallum_MTLCommandBuffer_encodePresentTextureToDrawable",
-                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS)
-        );
-        this.createBuffer = downcall(lookup, "metallum_create_buffer", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, LONG));
-        this.createTexture2d = downcall(
-                lookup,
-                "metallum_create_texture_2d",
-                FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, LONG, LONG, LONG, LONG, LONG, LONG, LONG, ValueLayout.ADDRESS)
-        );
-        this.createTextureView = downcall(lookup, "metallum_create_texture_view", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, LONG));
-        this.createBufferTextureView = downcall(
-                lookup,
-                "metallum_create_buffer_texture_view",
-                FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, LONG, LONG, LONG, LONG)
-        );
-        this.createSampler = downcall(
-                lookup,
-                "metallum_create_sampler",
-                FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, LONG, LONG, LONG, LONG, INT, DOUBLE)
-        );
-        this.MTLVertexDescriptorCreate = downcall(
-                lookup,
-                "metallum_MTLVertexDescriptor_create",
-                FunctionDescriptor.of(ValueLayout.ADDRESS)
-        );
-        this.MTLVertexDescriptorSetAttribute = downcall(
-                lookup,
-                "metallum_MTLVertexDescriptor_setAttribute",
-                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, LONG, LONG, LONG, LONG)
-        );
-        this.MTLVertexDescriptorSetLayout = downcall(
-                lookup,
-                "metallum_MTLVertexDescriptor_setLayout",
-                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, LONG, LONG, LONG, LONG)
-        );
-        this.MTLRenderPipelineDescriptorCreate = downcall(
-                lookup,
-                "metallum_MTLRenderPipelineDescriptor_create",
-                FunctionDescriptor.of(ValueLayout.ADDRESS)
-        );
-        this.MTLRenderPipelineDescriptorSetFunctions = downcall(
-                lookup,
-                "metallum_MTLRenderPipelineDescriptor_setFunctions",
-                FunctionDescriptor.of(INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS)
-        );
-        this.MTLRenderPipelineDescriptorSetVertexDescriptor = downcall(
-                lookup,
-                "metallum_MTLRenderPipelineDescriptor_setVertexDescriptor",
-                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS)
-        );
-        this.MTLRenderPipelineDescriptorSetAttachmentFormats = downcall(
-                lookup,
-                "metallum_MTLRenderPipelineDescriptor_setAttachmentFormats",
-                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, LONG, LONG, LONG)
-        );
-        this.MTLRenderPipelineDescriptorSetBlendState = downcall(
-                lookup,
-                "metallum_MTLRenderPipelineDescriptor_setBlendState",
-                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, INT, LONG, LONG, LONG, LONG, LONG, LONG, LONG)
-        );
-        this.MTLDeviceMakeRenderPipelineState = downcall(
-                lookup,
-                "metallum_MTLDevice_makeRenderPipelineState",
-                FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS)
-        );
-        this.configureLayer = downcall(lookup, "metallum_configure_layer", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, DOUBLE, DOUBLE, INT));
-        this.releaseObject = downcall(lookup, "metallum_release_object", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
-        this.getBufferContents = downcall(lookup, "metallum_get_buffer_contents", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
-        this.createFence = downcall(lookup, "metallum_create_fence", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
-        this.MTLRenderCommandEncoderUpdateFence = downcall(lookup, "MTLRenderCommandEncoder_updateFence", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG));
-        this.MTLRenderCommandEncoderWaitForFence = downcall(lookup, "MTLRenderCommandEncoder_waitForFence", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG));
-        this.MTLBlitCommandEncoderUpdateFence = downcall(lookup, "MTLBlitCommandEncoder_updateFence", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
-        this.MTLBlitCommandEncoderWaitForFence = downcall(lookup, "MTLBlitCommandEncoder_waitForFence", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
-    }
-
-    private static MetalNativeBridge loadNative() {
+    static {
         try {
             Path tempLib = Files.createTempFile("metallum-native-", ".dylib");
             tempLib.toFile().deleteOnExit();
@@ -277,158 +35,404 @@ public final class MetalNativeBridge {
                 Files.copy(stream, tempLib, StandardCopyOption.REPLACE_EXISTING);
             }
 
-            Arena arena = Arena.ofShared();
-            SymbolLookup lookup = SymbolLookup.libraryLookup(tempLib, arena);
-            return new MetalNativeBridge(arena, lookup);
+            SymbolLookup lookup = SymbolLookup.libraryLookup(tempLib, Arena.global());
+
+
+            createSystemDefaultDevice = downcall(lookup, "metallum_create_system_default_device", FunctionDescriptor.of(ValueLayout.ADDRESS));
+            copyDeviceName = downcall(lookup, "metallum_copy_device_name", FunctionDescriptor.of(INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG));
+            NSWindowBackingScaleFactor = downcall(lookup, "metallum_NSWindow_backingScaleFactor", FunctionDescriptor.of(DOUBLE, ValueLayout.ADDRESS));
+            createMetalLayer = downcall(lookup, "metallum_create_metal_layer", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, DOUBLE));
+            NSViewSetMetalLayer = downcall(lookup, "metallum_NSView_setMetalLayer", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+            NSViewClearLayer = downcall(lookup, "metallum_NSView_clearLayer", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+            setDebugLabelsEnabled = downcall(lookup, "metallum_set_debug_labels_enabled", FunctionDescriptor.ofVoid(INT));
+            initPipelines = downcall(lookup, "metallum_init_pipelines", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+
+            MTLDeviceMakeCommandQueue = downcall(lookup, "metallum_MTLDevice_makeCommandQueue", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+            MTLCommandQueueMakeCommandBuffer = downcall(lookup, "metallum_MTLCommandQueue_makeCommandBuffer", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+            MTLCommandBufferCommit = downcall(lookup, "metallum_MTLCommandBuffer_commit", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+            MTLCommandBufferIsCompleted = downcall(lookup, "metallum_MTLCommandBuffer_isCompleted", FunctionDescriptor.of(INT, ValueLayout.ADDRESS));
+            MTLCommandBufferWaitUntilCompleted = downcallWithoutCritical(lookup, "metallum_MTLCommandBuffer_waitUntilCompleted", FunctionDescriptor.of(INT, ValueLayout.ADDRESS, LONG));
+            MTLCommandBufferPushDebugGroup = downcall(lookup, "metallum_MTLCommandBuffer_pushDebugGroup", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+            MTLCommandBufferPopDebugGroup = downcall(lookup, "metallum_MTLCommandBuffer_popDebugGroup", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+            MTLCommandBufferMakeBlitCommandEncoder = downcall(lookup, "metallum_MTLCommandBuffer_makeBlitCommandEncoder", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+            MTLCommandEncoderEndEncoding = downcall(lookup, "metallum_MTLCommandEncoder_endEncoding", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+            MTLBlitCommandEncoderCopyFromBufferToBuffer = downcall(
+                    lookup,
+                    "metallum_MTLBlitCommandEncoder_copyFromBufferToBuffer",
+                    FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, ValueLayout.ADDRESS, LONG, LONG)
+            );
+            MTLBlitCommandEncoderCopyFromBufferToTexture = downcall(
+                    lookup,
+                    "metallum_MTLBlitCommandEncoder_copyFromBufferToTexture",
+                    FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, ValueLayout.ADDRESS, LONG, LONG, LONG, LONG, LONG, LONG, LONG, LONG)
+            );
+            MTLBlitCommandEncoderCopyFromTextureToTexture = downcall(
+                    lookup,
+                    "metallum_MTLBlitCommandEncoder_copyFromTextureToTexture",
+                    FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, LONG, LONG, LONG, LONG, LONG, LONG)
+            );
+            MTLBlitCommandEncoderCopyFromTextureToBuffer = downcall(
+                    lookup,
+                    "metallum_MTLBlitCommandEncoder_copyFromTextureToBuffer",
+                    FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, LONG, LONG, LONG, LONG, LONG, LONG, LONG, LONG)
+            );
+            MTLDeviceMakeDepthStencilState = downcall(lookup, "metallum_MTLDevice_makeDepthStencilState", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, INT));
+            MTLCommandBufferMakeRenderCommandEncoder = downcall(
+                    lookup,
+                    "metallum_MTLCommandBuffer_makeRenderCommandEncoder",
+                    FunctionDescriptor.of(
+                            ValueLayout.ADDRESS,
+                            ValueLayout.ADDRESS,
+                            ValueLayout.ADDRESS,
+                            ValueLayout.ADDRESS,
+                            DOUBLE,
+                            DOUBLE,
+                            INT,
+                            FLOAT,
+                            FLOAT,
+                            FLOAT,
+                            FLOAT,
+                            INT,
+                            DOUBLE
+                    )
+            );
+            MTLRenderCommandEncoderSetRenderPipelineState = downcall(lookup, "metallum_MTLRenderCommandEncoder_setRenderPipelineState", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+            MTLRenderCommandEncoderSetDepthStencilState = downcall(lookup, "metallum_MTLRenderCommandEncoder_setDepthStencilState", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+            MTLRenderCommandEncoderSetDepthBias = downcall(lookup, "metallum_MTLRenderCommandEncoder_setDepthBias", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, FLOAT, FLOAT, FLOAT));
+            MTLRenderCommandEncoderSetFrontFacingWinding = downcall(lookup, "metallum_MTLRenderCommandEncoder_setFrontFacingWinding", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, INT));
+            MTLRenderCommandEncoderSetCullMode = downcall(lookup, "metallum_MTLRenderCommandEncoder_setCullMode", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, LONG));
+            MTLRenderCommandEncoderSetTriangleFillMode = downcall(lookup, "metallum_MTLRenderCommandEncoder_setTriangleFillMode", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, INT));
+            MTLRenderCommandEncoderSetBuffer = downcall(lookup, "metallum_MTLRenderCommandEncoder_setBuffer", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, LONG, INT));
+            MTLRenderCommandEncoderSetTexture = downcall(lookup, "metallum_MTLRenderCommandEncoder_setTexture", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, INT));
+            MTLRenderCommandEncoderSetTextureAndSampler = downcall(lookup, "metallum_MTLRenderCommandEncoder_setTextureAndSampler", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, INT));
+            MTLRenderCommandEncoderSetScissorRect = downcall(lookup, "metallum_MTLRenderCommandEncoder_setScissorRect", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, LONG, LONG, LONG, LONG));
+            MTLRenderCommandEncoderDrawPrimitives = downcall(lookup, "metallum_MTLRenderCommandEncoder_drawPrimitives", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, LONG, LONG, LONG, LONG));
+            MTLRenderCommandEncoderDrawIndexedPrimitives = downcall(
+                    lookup,
+                    "metallum_MTLRenderCommandEncoder_drawIndexedPrimitives",
+                    FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, LONG, LONG, LONG, ValueLayout.ADDRESS, LONG, LONG, LONG)
+            );
+            MTLRenderCommandEncoderMultiDrawIndexed = downcall(
+                    lookup,
+                    "metallum_MTLRenderCommandEncoder_multiDrawIndexed",
+                    FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, LONG, LONG, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, LONG)
+            );
+            MTLRenderCommandEncoderDrawIndexedPrimitivesTriangleFan = downcallWithoutCritical(
+                    lookup,
+                    "metallum_MTLRenderCommandEncoder_drawIndexedPrimitivesTriangleFan",
+                    FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, LONG, LONG, LONG, LONG, LONG)
+            );
+            MTLCommandBufferClearColorDepthTexturesRegion = downcall(
+                    lookup,
+                    "metallum_MTLCommandBuffer_clearColorDepthTexturesRegion",
+                    FunctionDescriptor.ofVoid(
+                            ValueLayout.ADDRESS,
+                            ValueLayout.ADDRESS,
+                            FLOAT,
+                            FLOAT,
+                            FLOAT,
+                            FLOAT,
+                            ValueLayout.ADDRESS,
+                            DOUBLE,
+                            INT,
+                            INT,
+                            INT,
+                            INT,
+                            ValueLayout.ADDRESS
+                    )
+            );
+            MTLCommandBufferEncodePresentTextureToDrawable = downcallWithoutCritical(
+                    lookup,
+                    "metallum_MTLCommandBuffer_encodePresentTextureToDrawable",
+                    FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS)
+            );
+            createBuffer = downcall(lookup, "metallum_create_buffer", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, LONG));
+            createTexture2d = downcall(
+                    lookup,
+                    "metallum_create_texture_2d",
+                    FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, LONG, LONG, LONG, LONG, LONG, LONG, LONG, ValueLayout.ADDRESS)
+            );
+            createTextureView = downcall(lookup, "metallum_create_texture_view", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, LONG));
+            createBufferTextureView = downcall(
+                    lookup,
+                    "metallum_create_buffer_texture_view",
+                    FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, LONG, LONG, LONG, LONG)
+            );
+            createSampler = downcall(
+                    lookup,
+                    "metallum_create_sampler",
+                    FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, LONG, LONG, LONG, LONG, INT, DOUBLE)
+            );
+            MTLVertexDescriptorCreate = downcall(
+                    lookup,
+                    "metallum_MTLVertexDescriptor_create",
+                    FunctionDescriptor.of(ValueLayout.ADDRESS)
+            );
+            MTLVertexDescriptorSetAttribute = downcall(
+                    lookup,
+                    "metallum_MTLVertexDescriptor_setAttribute",
+                    FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, LONG, LONG, LONG, LONG)
+            );
+            MTLVertexDescriptorSetLayout = downcall(
+                    lookup,
+                    "metallum_MTLVertexDescriptor_setLayout",
+                    FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, LONG, LONG, LONG, LONG)
+            );
+            MTLRenderPipelineDescriptorCreate = downcall(
+                    lookup,
+                    "metallum_MTLRenderPipelineDescriptor_create",
+                    FunctionDescriptor.of(ValueLayout.ADDRESS)
+            );
+            MTLRenderPipelineDescriptorSetFunctions = downcall(
+                    lookup,
+                    "metallum_MTLRenderPipelineDescriptor_setFunctions",
+                    FunctionDescriptor.of(INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS)
+            );
+            MTLRenderPipelineDescriptorSetVertexDescriptor = downcall(
+                    lookup,
+                    "metallum_MTLRenderPipelineDescriptor_setVertexDescriptor",
+                    FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS)
+            );
+            MTLRenderPipelineDescriptorSetAttachmentFormats = downcall(
+                    lookup,
+                    "metallum_MTLRenderPipelineDescriptor_setAttachmentFormats",
+                    FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, LONG, LONG, LONG)
+            );
+            MTLRenderPipelineDescriptorSetBlendState = downcall(
+                    lookup,
+                    "metallum_MTLRenderPipelineDescriptor_setBlendState",
+                    FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, INT, LONG, LONG, LONG, LONG, LONG, LONG, LONG)
+            );
+            MTLDeviceMakeRenderPipelineState = downcall(
+                    lookup,
+                    "metallum_MTLDevice_makeRenderPipelineState",
+                    FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS)
+            );
+            configureLayer = downcall(lookup, "metallum_configure_layer", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, DOUBLE, DOUBLE, INT));
+            releaseObject = downcall(lookup, "metallum_release_object", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+            getBufferContents = downcall(lookup, "metallum_get_buffer_contents", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+            createFence = downcall(lookup, "metallum_create_fence", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+            MTLRenderCommandEncoderUpdateFence = downcall(lookup, "MTLRenderCommandEncoder_updateFence", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG));
+            MTLRenderCommandEncoderWaitForFence = downcallWithoutCritical(lookup, "MTLRenderCommandEncoder_waitForFence", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG));
+            MTLBlitCommandEncoderUpdateFence = downcall(lookup, "MTLBlitCommandEncoder_updateFence", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+            MTLBlitCommandEncoderWaitForFence = downcallWithoutCritical(lookup, "MTLBlitCommandEncoder_waitForFence", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
         } catch (IOException e) {
             throw new IllegalStateException("Failed to load Metal native bridge", e);
         }
     }
 
+
+    private static final MethodHandle createSystemDefaultDevice;
+    private static final MethodHandle copyDeviceName;
+    private static final MethodHandle NSWindowBackingScaleFactor;
+    private static final MethodHandle createMetalLayer;
+    private static final MethodHandle NSViewSetMetalLayer;
+    private static final MethodHandle NSViewClearLayer;
+    private static final MethodHandle setDebugLabelsEnabled;
+    private static final MethodHandle MTLDeviceMakeCommandQueue;
+    private static final MethodHandle MTLCommandQueueMakeCommandBuffer;
+    private static final MethodHandle MTLCommandBufferCommit;
+    private static final MethodHandle MTLCommandBufferIsCompleted;
+    private static final MethodHandle MTLCommandBufferWaitUntilCompleted;
+    private static final MethodHandle MTLCommandBufferPushDebugGroup;
+    private static final MethodHandle MTLCommandBufferPopDebugGroup;
+    private static final MethodHandle MTLCommandBufferMakeBlitCommandEncoder;
+    private static final MethodHandle MTLCommandEncoderEndEncoding;
+    private static final MethodHandle MTLBlitCommandEncoderCopyFromBufferToBuffer;
+    private static final MethodHandle MTLBlitCommandEncoderCopyFromBufferToTexture;
+    private static final MethodHandle MTLBlitCommandEncoderCopyFromTextureToTexture;
+    private static final MethodHandle MTLBlitCommandEncoderCopyFromTextureToBuffer;
+    private static final MethodHandle MTLDeviceMakeDepthStencilState;
+    private static final MethodHandle MTLCommandBufferMakeRenderCommandEncoder;
+    private static final MethodHandle MTLRenderCommandEncoderSetRenderPipelineState;
+    private static final MethodHandle MTLRenderCommandEncoderSetDepthStencilState;
+    private static final MethodHandle MTLRenderCommandEncoderSetDepthBias;
+    private static final MethodHandle MTLRenderCommandEncoderSetFrontFacingWinding;
+    private static final MethodHandle MTLRenderCommandEncoderSetCullMode;
+    private static final MethodHandle MTLRenderCommandEncoderSetTriangleFillMode;
+    private static final MethodHandle MTLRenderCommandEncoderSetBuffer;
+    private static final MethodHandle MTLRenderCommandEncoderSetTexture;
+    private static final MethodHandle MTLRenderCommandEncoderSetTextureAndSampler;
+    private static final MethodHandle MTLRenderCommandEncoderSetScissorRect;
+    private static final MethodHandle MTLRenderCommandEncoderDrawPrimitives;
+    private static final MethodHandle MTLRenderCommandEncoderDrawIndexedPrimitives;
+    private static final MethodHandle MTLRenderCommandEncoderMultiDrawIndexed;
+    private static final MethodHandle MTLRenderCommandEncoderDrawIndexedPrimitivesTriangleFan;
+    private static final MethodHandle MTLCommandBufferClearColorDepthTexturesRegion;
+    private static final MethodHandle MTLCommandBufferEncodePresentTextureToDrawable;
+    private static final MethodHandle createBuffer;
+    private static final MethodHandle createTexture2d;
+    private static final MethodHandle createTextureView;
+    private static final MethodHandle createBufferTextureView;
+    private static final MethodHandle createSampler;
+    private static final MethodHandle MTLVertexDescriptorCreate;
+    private static final MethodHandle MTLVertexDescriptorSetAttribute;
+    private static final MethodHandle MTLVertexDescriptorSetLayout;
+    private static final MethodHandle MTLRenderPipelineDescriptorCreate;
+    private static final MethodHandle MTLRenderPipelineDescriptorSetFunctions;
+    private static final MethodHandle MTLRenderPipelineDescriptorSetVertexDescriptor;
+    private static final MethodHandle MTLRenderPipelineDescriptorSetAttachmentFormats;
+    private static final MethodHandle MTLRenderPipelineDescriptorSetBlendState;
+    private static final MethodHandle MTLDeviceMakeRenderPipelineState;
+    private static final MethodHandle configureLayer;
+    private static final MethodHandle releaseObject;
+    private static final MethodHandle getBufferContents;
+    private static final MethodHandle createFence;
+    private static final MethodHandle MTLRenderCommandEncoderUpdateFence;
+    private static final MethodHandle MTLRenderCommandEncoderWaitForFence;
+    private static final MethodHandle MTLBlitCommandEncoderUpdateFence;
+    private static final MethodHandle MTLBlitCommandEncoderWaitForFence;
+    private static final MethodHandle initPipelines;
+
+
     private static MethodHandle downcall(final SymbolLookup lookup, final String symbol, final FunctionDescriptor descriptor) {
+        return LINKER.downcallHandle(lookup.findOrThrow(symbol), descriptor, Linker.Option.critical(false));
+    }
+
+    private static MethodHandle downcallWithoutCritical(final SymbolLookup lookup, final String symbol, final FunctionDescriptor descriptor) {
         return LINKER.downcallHandle(lookup.findOrThrow(symbol), descriptor);
     }
 
-    public MemorySegment metallum_create_system_default_device() {
+    public static MemorySegment metallum_create_system_default_device() {
         try {
-            return (MemorySegment) this.createSystemDefaultDevice.invokeExact();
+            return (MemorySegment) createSystemDefaultDevice.invokeExact();
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_create_system_default_device", throwable);
         }
     }
 
-    public String metallum_copy_device_name(final MemorySegment device) {
+    public static String metallum_copy_device_name(final MemorySegment device) {
         try (Arena arena = Arena.ofConfined()) {
             MemorySegment buffer = arena.allocate(256L);
-            int result = (int) this.copyDeviceName.invokeExact(segment(device), buffer, 256L);
+            int result = (int) copyDeviceName.invokeExact(segment(device), buffer, 256L);
             return result == 0 ? buffer.getString(0L) : "";
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_copy_device_name", throwable);
         }
     }
 
-    public double metallum_NSWindow_backingScaleFactor(final MemorySegment window) {
+    public static double metallum_NSWindow_backingScaleFactor(final MemorySegment window) {
         try {
-            return (double) this.NSWindowBackingScaleFactor.invokeExact(segment(window));
+            return (double) NSWindowBackingScaleFactor.invokeExact(segment(window));
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_NSWindow_backingScaleFactor", throwable);
         }
     }
 
-    public MemorySegment metallum_create_metal_layer(final MemorySegment device, final double contentsScale) {
+    public static MemorySegment metallum_create_metal_layer(final MemorySegment device, final double contentsScale) {
         try {
-            return (MemorySegment) this.createMetalLayer.invokeExact(segment(device), contentsScale);
+            return (MemorySegment) createMetalLayer.invokeExact(segment(device), contentsScale);
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_create_metal_layer", throwable);
         }
     }
 
-    public void metallum_NSView_setMetalLayer(final MemorySegment view, final MemorySegment layer) {
+    public static void metallum_NSView_setMetalLayer(final MemorySegment view, final MemorySegment layer) {
         try {
-            this.NSViewSetMetalLayer.invokeExact(segment(view), segment(layer));
+            NSViewSetMetalLayer.invokeExact(segment(view), segment(layer));
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_NSView_setMetalLayer", throwable);
         }
     }
 
-    public void metallum_NSView_clearLayer(final MemorySegment view) {
+    public static void metallum_NSView_clearLayer(final MemorySegment view) {
         try {
-            this.NSViewClearLayer.invokeExact(segment(view));
+            NSViewClearLayer.invokeExact(segment(view));
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_NSView_clearLayer", throwable);
         }
     }
 
-    public void metallum_set_debug_labels_enabled(final boolean enabled) {
+    public static void metallum_set_debug_labels_enabled(final boolean enabled) {
         try {
-            this.setDebugLabelsEnabled.invokeExact(enabled ? 1 : 0);
+            setDebugLabelsEnabled.invokeExact(enabled ? 1 : 0);
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_set_debug_labels_enabled", throwable);
         }
     }
 
-    public void metallum_init_pipelines(final MemorySegment device) {
+    public static void metallum_init_pipelines(final MemorySegment device) {
         try {
-            this.initPipelines.invokeExact(segment(device));
+            initPipelines.invokeExact(segment(device));
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_init_pipelines", throwable);
         }
     }
 
 
-    public MemorySegment MTLDevice_makeCommandQueue(final MemorySegment device) {
+    public static MemorySegment MTLDevice_makeCommandQueue(final MemorySegment device) {
         try {
-            return (MemorySegment) this.MTLDeviceMakeCommandQueue.invokeExact(segment(device));
+            return (MemorySegment) MTLDeviceMakeCommandQueue.invokeExact(segment(device));
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_MTLDevice_makeCommandQueue", throwable);
         }
     }
 
-    public MemorySegment MTLCommandQueue_makeCommandBuffer(final MemorySegment commandQueue, final String label) {
+    public static MemorySegment MTLCommandQueue_makeCommandBuffer(final MemorySegment commandQueue, final String label) {
         try (Arena arena = Arena.ofConfined()) {
-            return (MemorySegment) this.MTLCommandQueueMakeCommandBuffer.invokeExact(segment(commandQueue), toCString(arena, label));
+            return (MemorySegment) MTLCommandQueueMakeCommandBuffer.invokeExact(segment(commandQueue), toCString(arena, label));
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_MTLCommandQueue_makeCommandBuffer", throwable);
         }
     }
 
-    public void MTLCommandBuffer_commit(final MemorySegment commandBuffer) {
+    public static void MTLCommandBuffer_commit(final MemorySegment commandBuffer) {
         try {
-            this.MTLCommandBufferCommit.invokeExact(segment(commandBuffer));
+            MTLCommandBufferCommit.invokeExact(segment(commandBuffer));
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_MTLCommandBuffer_commit", throwable);
         }
     }
 
-    public int MTLCommandBuffer_isCompleted(final MemorySegment commandBuffer) {
+    public static int MTLCommandBuffer_isCompleted(final MemorySegment commandBuffer) {
         try {
-            return (int) this.MTLCommandBufferIsCompleted.invokeExact(segment(commandBuffer));
+            return (int) MTLCommandBufferIsCompleted.invokeExact(segment(commandBuffer));
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_MTLCommandBuffer_isCompleted", throwable);
         }
     }
 
-    public int MTLCommandBuffer_waitUntilCompleted(final MemorySegment commandBuffer, final long timeoutMs) {
+    public static int MTLCommandBuffer_waitUntilCompleted(final MemorySegment commandBuffer, final long timeoutMs) {
         try {
-            return (int) this.MTLCommandBufferWaitUntilCompleted.invokeExact(segment(commandBuffer), timeoutMs);
+            return (int) MTLCommandBufferWaitUntilCompleted.invokeExact(segment(commandBuffer), timeoutMs);
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_MTLCommandBuffer_waitUntilCompleted", throwable);
         }
     }
 
-    public void MTLCommandBuffer_pushDebugGroup(final MemorySegment commandBuffer, final String label) {
+    public static void MTLCommandBuffer_pushDebugGroup(final MemorySegment commandBuffer, final String label) {
         try (Arena arena = Arena.ofConfined()) {
-            this.MTLCommandBufferPushDebugGroup.invokeExact(segment(commandBuffer), toCString(arena, label));
+            MTLCommandBufferPushDebugGroup.invokeExact(segment(commandBuffer), toCString(arena, label));
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_MTLCommandBuffer_pushDebugGroup", throwable);
         }
     }
 
-    public void MTLCommandBuffer_popDebugGroup(final MemorySegment commandBuffer) {
+    public static void MTLCommandBuffer_popDebugGroup(final MemorySegment commandBuffer) {
         try {
-            this.MTLCommandBufferPopDebugGroup.invokeExact(segment(commandBuffer));
+            MTLCommandBufferPopDebugGroup.invokeExact(segment(commandBuffer));
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_MTLCommandBuffer_popDebugGroup", throwable);
         }
     }
 
-    public MemorySegment MTLCommandBuffer_makeBlitCommandEncoder(final MemorySegment commandBuffer) {
+    public static MemorySegment MTLCommandBuffer_makeBlitCommandEncoder(final MemorySegment commandBuffer) {
         try {
-            return (MemorySegment) this.MTLCommandBufferMakeBlitCommandEncoder.invokeExact(segment(commandBuffer));
+            return (MemorySegment) MTLCommandBufferMakeBlitCommandEncoder.invokeExact(segment(commandBuffer));
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_MTLCommandBuffer_makeBlitCommandEncoder", throwable);
         }
     }
 
-    public void MTLCommandEncoder_endEncoding(final MemorySegment encoder) {
+    public static void MTLCommandEncoder_endEncoding(final MemorySegment encoder) {
         try {
-            this.MTLCommandEncoderEndEncoding.invokeExact(segment(encoder));
+            MTLCommandEncoderEndEncoding.invokeExact(segment(encoder));
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_MTLCommandEncoder_endEncoding", throwable);
         }
     }
 
-    public void MTLBlitCommandEncoder_copyFromBufferToBuffer(
+    public static void MTLBlitCommandEncoder_copyFromBufferToBuffer(
             final MemorySegment blitEncoder,
             final MemorySegment sourceBuffer,
             final long sourceOffset,
@@ -437,7 +441,7 @@ public final class MetalNativeBridge {
             final long length
     ) {
         try {
-            this.MTLBlitCommandEncoderCopyFromBufferToBuffer.invokeExact(
+            MTLBlitCommandEncoderCopyFromBufferToBuffer.invokeExact(
                     segment(blitEncoder),
                     segment(sourceBuffer),
                     sourceOffset,
@@ -450,7 +454,7 @@ public final class MetalNativeBridge {
         }
     }
 
-    public void MTLBlitCommandEncoder_copyFromBufferToTexture(
+    public static void MTLBlitCommandEncoder_copyFromBufferToTexture(
             final MemorySegment blitEncoder,
             final MemorySegment sourceBuffer,
             final long sourceOffset,
@@ -465,7 +469,7 @@ public final class MetalNativeBridge {
             final long bytesPerImage
     ) {
         try {
-            this.MTLBlitCommandEncoderCopyFromBufferToTexture.invokeExact(
+            MTLBlitCommandEncoderCopyFromBufferToTexture.invokeExact(
                     segment(blitEncoder),
                     segment(sourceBuffer),
                     sourceOffset,
@@ -484,7 +488,7 @@ public final class MetalNativeBridge {
         }
     }
 
-    public void MTLBlitCommandEncoder_copyFromTextureToTexture(
+    public static void MTLBlitCommandEncoder_copyFromTextureToTexture(
             final MemorySegment blitEncoder,
             final MemorySegment sourceTexture,
             final MemorySegment destinationTexture,
@@ -497,7 +501,7 @@ public final class MetalNativeBridge {
             final long height
     ) {
         try {
-            this.MTLBlitCommandEncoderCopyFromTextureToTexture.invokeExact(
+            MTLBlitCommandEncoderCopyFromTextureToTexture.invokeExact(
                     segment(blitEncoder),
                     segment(sourceTexture),
                     segment(destinationTexture),
@@ -514,7 +518,7 @@ public final class MetalNativeBridge {
         }
     }
 
-    public void MTLBlitCommandEncoder_copyFromTextureToBuffer(
+    public static void MTLBlitCommandEncoder_copyFromTextureToBuffer(
             final MemorySegment blitEncoder,
             final MemorySegment sourceTexture,
             final MemorySegment destinationBuffer,
@@ -529,7 +533,7 @@ public final class MetalNativeBridge {
             final long bytesPerImage
     ) {
         try {
-            this.MTLBlitCommandEncoderCopyFromTextureToBuffer.invokeExact(
+            MTLBlitCommandEncoderCopyFromTextureToBuffer.invokeExact(
                     segment(blitEncoder),
                     segment(sourceTexture),
                     segment(destinationBuffer),
@@ -548,15 +552,15 @@ public final class MetalNativeBridge {
         }
     }
 
-    public MemorySegment metallum_create_buffer(final MemorySegment device, final long length, final long options) {
+    public static MemorySegment metallum_create_buffer(final MemorySegment device, final long length, final long options) {
         try {
-            return (MemorySegment) this.createBuffer.invokeExact(segment(device), length, options);
+            return (MemorySegment) createBuffer.invokeExact(segment(device), length, options);
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_create_buffer", throwable);
         }
     }
 
-    public MemorySegment metallum_create_texture_2d(
+    public static MemorySegment metallum_create_texture_2d(
             final MemorySegment device,
             final long pixelFormat,
             final long width,
@@ -569,7 +573,7 @@ public final class MetalNativeBridge {
             final String label
     ) {
         try (Arena arena = Arena.ofConfined()) {
-            return (MemorySegment) this.createTexture2d.invokeExact(
+            return (MemorySegment) createTexture2d.invokeExact(
                     segment(device),
                     pixelFormat,
                     width,
@@ -586,15 +590,15 @@ public final class MetalNativeBridge {
         }
     }
 
-    public MemorySegment metallum_create_texture_view(final MemorySegment texture, final long baseMipLevel, final long mipLevelCount) {
+    public static MemorySegment metallum_create_texture_view(final MemorySegment texture, final long baseMipLevel, final long mipLevelCount) {
         try {
-            return (MemorySegment) this.createTextureView.invokeExact(segment(texture), baseMipLevel, mipLevelCount);
+            return (MemorySegment) createTextureView.invokeExact(segment(texture), baseMipLevel, mipLevelCount);
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_create_texture_view", throwable);
         }
     }
 
-    public MemorySegment metallum_create_buffer_texture_view(
+    public static MemorySegment metallum_create_buffer_texture_view(
             final MemorySegment buffer,
             final long pixelFormat,
             final long offset,
@@ -603,13 +607,13 @@ public final class MetalNativeBridge {
             final long bytesPerRow
     ) {
         try {
-            return (MemorySegment) this.createBufferTextureView.invokeExact(segment(buffer), pixelFormat, offset, width, height, bytesPerRow);
+            return (MemorySegment) createBufferTextureView.invokeExact(segment(buffer), pixelFormat, offset, width, height, bytesPerRow);
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_create_buffer_texture_view", throwable);
         }
     }
 
-    public MemorySegment metallum_create_sampler(
+    public static MemorySegment metallum_create_sampler(
             final MemorySegment device,
             final long addressModeU,
             final long addressModeV,
@@ -620,7 +624,7 @@ public final class MetalNativeBridge {
             final double lodMaxClamp
     ) {
         try {
-            return (MemorySegment) this.createSampler.invokeExact(
+            return (MemorySegment) createSampler.invokeExact(
                     segment(device),
                     addressModeU,
                     addressModeV,
@@ -635,15 +639,15 @@ public final class MetalNativeBridge {
         }
     }
 
-    public MemorySegment MTLDevice_makeDepthStencilState(final MemorySegment device, final MTLCompareFunction depthCompareOp, final int writeDepth) {
+    public static MemorySegment MTLDevice_makeDepthStencilState(final MemorySegment device, final MTLCompareFunction depthCompareOp, final int writeDepth) {
         try {
-            return (MemorySegment) this.MTLDeviceMakeDepthStencilState.invokeExact(segment(device), depthCompareOp.value, writeDepth);
+            return (MemorySegment) MTLDeviceMakeDepthStencilState.invokeExact(segment(device), depthCompareOp.value, writeDepth);
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_MTLDevice_makeDepthStencilState", throwable);
         }
     }
 
-    public MemorySegment MTLCommandBuffer_makeRenderCommandEncoder(
+    public static MemorySegment MTLCommandBuffer_makeRenderCommandEncoder(
             final MemorySegment commandBuffer,
             final MemorySegment colorTexture,
             final MemorySegment depthTexture,
@@ -658,7 +662,7 @@ public final class MetalNativeBridge {
             final double clearDepth
     ) {
         try {
-            return (MemorySegment) this.MTLCommandBufferMakeRenderCommandEncoder.invokeExact(
+            return (MemorySegment) MTLCommandBufferMakeRenderCommandEncoder.invokeExact(
                     segment(commandBuffer),
                     segment(colorTexture),
                     segment(depthTexture),
@@ -677,87 +681,87 @@ public final class MetalNativeBridge {
         }
     }
 
-    public void MTLRenderCommandEncoder_setRenderPipelineState(final MemorySegment encoder, final MemorySegment pipeline) {
+    public static void MTLRenderCommandEncoder_setRenderPipelineState(final MemorySegment encoder, final MemorySegment pipeline) {
         try {
-            this.MTLRenderCommandEncoderSetRenderPipelineState.invokeExact(segment(encoder), segment(pipeline));
+            MTLRenderCommandEncoderSetRenderPipelineState.invokeExact(segment(encoder), segment(pipeline));
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_MTLRenderCommandEncoder_setRenderPipelineState", throwable);
         }
     }
 
-    public void MTLRenderCommandEncoder_setDepthStencilState(final MemorySegment encoder, final MemorySegment depthStencilState) {
+    public static void MTLRenderCommandEncoder_setDepthStencilState(final MemorySegment encoder, final MemorySegment depthStencilState) {
         try {
-            this.MTLRenderCommandEncoderSetDepthStencilState.invokeExact(segment(encoder), segment(depthStencilState));
+            MTLRenderCommandEncoderSetDepthStencilState.invokeExact(segment(encoder), segment(depthStencilState));
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_MTLRenderCommandEncoder_setDepthStencilState", throwable);
         }
     }
 
-    public void MTLRenderCommandEncoder_setDepthBias(final MemorySegment encoder, final float depthBias, final float slopeScale, final float clamp) {
+    public static void MTLRenderCommandEncoder_setDepthBias(final MemorySegment encoder, final float depthBias, final float slopeScale, final float clamp) {
         try {
-            this.MTLRenderCommandEncoderSetDepthBias.invokeExact(segment(encoder), depthBias, slopeScale, clamp);
+            MTLRenderCommandEncoderSetDepthBias.invokeExact(segment(encoder), depthBias, slopeScale, clamp);
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_MTLRenderCommandEncoder_setDepthBias", throwable);
         }
     }
 
-    public void MTLRenderCommandEncoder_setFrontFacingWinding(final MemorySegment encoder, final int clockwise) {
+    public static void MTLRenderCommandEncoder_setFrontFacingWinding(final MemorySegment encoder, final int clockwise) {
         try {
-            this.MTLRenderCommandEncoderSetFrontFacingWinding.invokeExact(segment(encoder), clockwise);
+            MTLRenderCommandEncoderSetFrontFacingWinding.invokeExact(segment(encoder), clockwise);
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_MTLRenderCommandEncoder_setFrontFacingWinding", throwable);
         }
     }
 
-    public void MTLRenderCommandEncoder_setCullMode(final MemorySegment encoder, final long cullMode) {
+    public static void MTLRenderCommandEncoder_setCullMode(final MemorySegment encoder, final long cullMode) {
         try {
-            this.MTLRenderCommandEncoderSetCullMode.invokeExact(segment(encoder), cullMode);
+            MTLRenderCommandEncoderSetCullMode.invokeExact(segment(encoder), cullMode);
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_MTLRenderCommandEncoder_setCullMode", throwable);
         }
     }
 
-    public void MTLRenderCommandEncoder_setTriangleFillMode(final MemorySegment encoder, final int lines) {
+    public static void MTLRenderCommandEncoder_setTriangleFillMode(final MemorySegment encoder, final int lines) {
         try {
-            this.MTLRenderCommandEncoderSetTriangleFillMode.invokeExact(segment(encoder), lines);
+            MTLRenderCommandEncoderSetTriangleFillMode.invokeExact(segment(encoder), lines);
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_MTLRenderCommandEncoder_setTriangleFillMode", throwable);
         }
     }
 
-    public void MTLRenderCommandEncoder_setBuffer(final MemorySegment encoder, final MemorySegment buffer, final long offset, final long index, final int stageMask) {
+    public static void MTLRenderCommandEncoder_setBuffer(final MemorySegment encoder, final MemorySegment buffer, final long offset, final long index, final int stageMask) {
         try {
-            this.MTLRenderCommandEncoderSetBuffer.invokeExact(segment(encoder), segment(buffer), offset, index, stageMask);
+            MTLRenderCommandEncoderSetBuffer.invokeExact(segment(encoder), segment(buffer), offset, index, stageMask);
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_MTLRenderCommandEncoder_setBuffer", throwable);
         }
     }
 
-    public void MTLRenderCommandEncoder_setTexture(final MemorySegment encoder, final MemorySegment texture, final long index, final int stageMask) {
+    public static void MTLRenderCommandEncoder_setTexture(final MemorySegment encoder, final MemorySegment texture, final long index, final int stageMask) {
         try {
-            this.MTLRenderCommandEncoderSetTexture.invokeExact(segment(encoder), segment(texture), index, stageMask);
+            MTLRenderCommandEncoderSetTexture.invokeExact(segment(encoder), segment(texture), index, stageMask);
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_MTLRenderCommandEncoder_setTexture", throwable);
         }
     }
 
-    public void MTLRenderCommandEncoder_setTextureAndSampler(final MemorySegment encoder, final MemorySegment texture, final MemorySegment sampler, final long index, final int stageMask) {
+    public static void MTLRenderCommandEncoder_setTextureAndSampler(final MemorySegment encoder, final MemorySegment texture, final MemorySegment sampler, final long index, final int stageMask) {
         try {
-            this.MTLRenderCommandEncoderSetTextureAndSampler.invokeExact(segment(encoder), segment(texture), segment(sampler), index, stageMask);
+            MTLRenderCommandEncoderSetTextureAndSampler.invokeExact(segment(encoder), segment(texture), segment(sampler), index, stageMask);
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_MTLRenderCommandEncoder_setTextureAndSampler", throwable);
         }
     }
 
-    public void MTLRenderCommandEncoder_setScissorRect(final MemorySegment encoder, final long x, final long y, final long width, final long height) {
+    public static void MTLRenderCommandEncoder_setScissorRect(final MemorySegment encoder, final long x, final long y, final long width, final long height) {
         try {
-            this.MTLRenderCommandEncoderSetScissorRect.invokeExact(segment(encoder), x, y, width, height);
+            MTLRenderCommandEncoderSetScissorRect.invokeExact(segment(encoder), x, y, width, height);
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_MTLRenderCommandEncoder_setScissorRect", throwable);
         }
     }
 
-    public void MTLRenderCommandEncoder_drawPrimitives(
+    public static void MTLRenderCommandEncoder_drawPrimitives(
             final MemorySegment encoder,
             final long primitiveType,
             final long firstVertex,
@@ -765,13 +769,13 @@ public final class MetalNativeBridge {
             final long instanceCount
     ) {
         try {
-            this.MTLRenderCommandEncoderDrawPrimitives.invokeExact(segment(encoder), primitiveType, firstVertex, vertexCount, instanceCount);
+            MTLRenderCommandEncoderDrawPrimitives.invokeExact(segment(encoder), primitiveType, firstVertex, vertexCount, instanceCount);
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_MTLRenderCommandEncoder_drawPrimitives", throwable);
         }
     }
 
-    public void MTLRenderCommandEncoder_drawIndexedPrimitives(
+    public static void MTLRenderCommandEncoder_drawIndexedPrimitives(
             final MemorySegment encoder,
             final long primitiveType,
             final long indexCount,
@@ -782,7 +786,7 @@ public final class MetalNativeBridge {
             final long baseVertex
     ) {
         try {
-            this.MTLRenderCommandEncoderDrawIndexedPrimitives.invokeExact(
+            MTLRenderCommandEncoderDrawIndexedPrimitives.invokeExact(
                     segment(encoder),
                     primitiveType,
                     indexCount,
@@ -797,7 +801,35 @@ public final class MetalNativeBridge {
         }
     }
 
-    public void MTLRenderCommandEncoder_drawIndexedPrimitivesTriangleFan(
+    public static void MTLRenderCommandEncoder_multiDrawIndexed(
+            final MemorySegment encoder,
+            final long primitiveType,
+            final long indexType,
+            final MemorySegment indexBuffer,
+            final MemorySegment firstIndexOffsets,
+            final MemorySegment indexCounts,
+            final MemorySegment vertexOffsets,
+            final long drawCount,
+            final long instanceCount
+    ) {
+        try {
+            MTLRenderCommandEncoderMultiDrawIndexed.invokeExact(
+                    segment(encoder),
+                    primitiveType,
+                    indexType,
+                    segment(indexBuffer),
+                    segment(firstIndexOffsets),
+                    segment(indexCounts),
+                    segment(vertexOffsets),
+                    drawCount,
+                    instanceCount
+            );
+        } catch (Throwable throwable) {
+            throw bridgeFailure("metallum_MTLRenderCommandEncoder_multiDrawIndexed", throwable);
+        }
+    }
+
+    public static void MTLRenderCommandEncoder_drawIndexedPrimitivesTriangleFan(
             final MemorySegment encoder,
             final MemorySegment indexBuffer,
             final MemorySegment fanIndexBuffer,
@@ -809,7 +841,7 @@ public final class MetalNativeBridge {
             final long instanceCount
     ) {
         try {
-            this.MTLRenderCommandEncoderDrawIndexedPrimitivesTriangleFan.invokeExact(
+            MTLRenderCommandEncoderDrawIndexedPrimitivesTriangleFan.invokeExact(
                     segment(encoder),
                     segment(indexBuffer),
                     segment(fanIndexBuffer),
@@ -825,7 +857,7 @@ public final class MetalNativeBridge {
         }
     }
 
-    public void MTLCommandBuffer_clearColorDepthTexturesRegion(
+    public static void MTLCommandBuffer_clearColorDepthTexturesRegion(
             final MemorySegment commandBuffer,
             final MemorySegment colorTexture,
             final float clearColorRed,
@@ -841,7 +873,7 @@ public final class MetalNativeBridge {
             final MemorySegment globalFence
     ) {
         try {
-            this.MTLCommandBufferClearColorDepthTexturesRegion.invokeExact(
+            MTLCommandBufferClearColorDepthTexturesRegion.invokeExact(
                     segment(commandBuffer),
                     segment(colorTexture),
                     clearColorRed,
@@ -861,15 +893,15 @@ public final class MetalNativeBridge {
         }
     }
 
-    public MemorySegment metallum_MTLVertexDescriptor_create() {
+    public static MemorySegment metallum_MTLVertexDescriptor_create() {
         try {
-            return (MemorySegment) this.MTLVertexDescriptorCreate.invokeExact();
+            return (MemorySegment) MTLVertexDescriptorCreate.invokeExact();
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_MTLVertexDescriptor_create", throwable);
         }
     }
 
-    public void metallum_MTLVertexDescriptor_setAttribute(
+    public static void metallum_MTLVertexDescriptor_setAttribute(
             final MemorySegment desc,
             final long index,
             final long format,
@@ -877,13 +909,13 @@ public final class MetalNativeBridge {
             final long bufferIndex
     ) {
         try {
-            this.MTLVertexDescriptorSetAttribute.invokeExact(segment(desc), index, format, offset, bufferIndex);
+            MTLVertexDescriptorSetAttribute.invokeExact(segment(desc), index, format, offset, bufferIndex);
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_MTLVertexDescriptor_setAttribute", throwable);
         }
     }
 
-    public void metallum_MTLVertexDescriptor_setLayout(
+    public static void metallum_MTLVertexDescriptor_setLayout(
             final MemorySegment desc,
             final long bufferIndex,
             final long stride,
@@ -891,21 +923,21 @@ public final class MetalNativeBridge {
             final long stepRate
     ) {
         try {
-            this.MTLVertexDescriptorSetLayout.invokeExact(segment(desc), bufferIndex, stride, stepFunction, stepRate);
+            MTLVertexDescriptorSetLayout.invokeExact(segment(desc), bufferIndex, stride, stepFunction, stepRate);
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_MTLVertexDescriptor_setLayout", throwable);
         }
     }
 
-    public MemorySegment metallum_MTLRenderPipelineDescriptor_create() {
+    public static MemorySegment metallum_MTLRenderPipelineDescriptor_create() {
         try {
-            return (MemorySegment) this.MTLRenderPipelineDescriptorCreate.invokeExact();
+            return (MemorySegment) MTLRenderPipelineDescriptorCreate.invokeExact();
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_MTLRenderPipelineDescriptor_create", throwable);
         }
     }
 
-    public boolean metallum_MTLRenderPipelineDescriptor_setFunctions(
+    public static boolean metallum_MTLRenderPipelineDescriptor_setFunctions(
             final MemorySegment desc,
             final MemorySegment device,
             final String vertexSource,
@@ -914,7 +946,7 @@ public final class MetalNativeBridge {
             final String fragmentEntry
     ) {
         try (Arena arena = Arena.ofConfined()) {
-            int result = (int) this.MTLRenderPipelineDescriptorSetFunctions.invokeExact(
+            int result = (int) MTLRenderPipelineDescriptorSetFunctions.invokeExact(
                     segment(desc),
                     segment(device),
                     toCString(arena, vertexSource),
@@ -928,31 +960,31 @@ public final class MetalNativeBridge {
         }
     }
 
-    public void metallum_MTLRenderPipelineDescriptor_setVertexDescriptor(
+    public static void metallum_MTLRenderPipelineDescriptor_setVertexDescriptor(
             final MemorySegment desc,
             final MemorySegment vertexDesc
     ) {
         try {
-            this.MTLRenderPipelineDescriptorSetVertexDescriptor.invokeExact(segment(desc), segment(vertexDesc));
+            MTLRenderPipelineDescriptorSetVertexDescriptor.invokeExact(segment(desc), segment(vertexDesc));
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_MTLRenderPipelineDescriptor_setVertexDescriptor", throwable);
         }
     }
 
-    public void metallum_MTLRenderPipelineDescriptor_setAttachmentFormats(
+    public static void metallum_MTLRenderPipelineDescriptor_setAttachmentFormats(
             final MemorySegment desc,
             final MTLPixelFormat colorFormat,
             final MTLPixelFormat depthFormat,
             final MTLPixelFormat stencilFormat
     ) {
         try {
-            this.MTLRenderPipelineDescriptorSetAttachmentFormats.invokeExact(segment(desc), colorFormat.value, depthFormat.value, stencilFormat.value);
+            MTLRenderPipelineDescriptorSetAttachmentFormats.invokeExact(segment(desc), colorFormat.value, depthFormat.value, stencilFormat.value);
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_MTLRenderPipelineDescriptor_setAttachmentFormats", throwable);
         }
     }
 
-    public void metallum_MTLRenderPipelineDescriptor_setBlendState(
+    public static void metallum_MTLRenderPipelineDescriptor_setBlendState(
             final MemorySegment desc,
             final int enabled,
             final long srcRgb,
@@ -964,7 +996,7 @@ public final class MetalNativeBridge {
             final long writeMask
     ) {
         try {
-            this.MTLRenderPipelineDescriptorSetBlendState.invokeExact(
+            MTLRenderPipelineDescriptorSetBlendState.invokeExact(
                     segment(desc),
                     enabled,
                     srcRgb,
@@ -980,90 +1012,90 @@ public final class MetalNativeBridge {
         }
     }
 
-    public MemorySegment metallum_MTLDevice_makeRenderPipelineState(
+    public static MemorySegment metallum_MTLDevice_makeRenderPipelineState(
             final MemorySegment device,
             final MemorySegment descriptor
     ) {
         try {
-            return (MemorySegment) this.MTLDeviceMakeRenderPipelineState.invokeExact(segment(device), segment(descriptor));
+            return (MemorySegment) MTLDeviceMakeRenderPipelineState.invokeExact(segment(device), segment(descriptor));
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_MTLDevice_makeRenderPipelineState", throwable);
         }
     }
 
-    public void metallum_configure_layer(final MemorySegment layer, final double width, final double height, final int immediatePresentMode) {
+    public static void metallum_configure_layer(final MemorySegment layer, final double width, final double height, final int immediatePresentMode) {
         try {
-            this.configureLayer.invokeExact(segment(layer), width, height, immediatePresentMode);
+            configureLayer.invokeExact(segment(layer), width, height, immediatePresentMode);
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_configure_layer", throwable);
         }
     }
 
-    public void MTLCommandBuffer_encodePresentTextureToDrawable(final MemorySegment commandBuffer, final MemorySegment layer, final MemorySegment sourceTexture, final MemorySegment globalFence) {
+    public static void MTLCommandBuffer_encodePresentTextureToDrawable(final MemorySegment commandBuffer, final MemorySegment layer, final MemorySegment sourceTexture, final MemorySegment globalFence) {
         try {
-            this.MTLCommandBufferEncodePresentTextureToDrawable.invokeExact(segment(commandBuffer), segment(layer), segment(sourceTexture), segment(globalFence));
+            MTLCommandBufferEncodePresentTextureToDrawable.invokeExact(segment(commandBuffer), segment(layer), segment(sourceTexture), segment(globalFence));
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_MTLCommandBuffer_encodePresentTextureToDrawable", throwable);
         }
     }
 
-    public void metallum_release_object(final MemorySegment object) {
+    public static void metallum_release_object(final MemorySegment object) {
         try {
-            this.releaseObject.invokeExact(segment(object));
+            releaseObject.invokeExact(segment(object));
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_release_object", throwable);
         }
     }
 
-    public MemorySegment metallum_create_fence(final MemorySegment device) {
+    public static MemorySegment metallum_create_fence(final MemorySegment device) {
         try {
-            return (MemorySegment) this.createFence.invokeExact(segment(device));
+            return (MemorySegment) createFence.invokeExact(segment(device));
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_create_fence", throwable);
         }
     }
 
-    public void MTLRenderCommandEncoder_updateFence(final MemorySegment encoder, final MemorySegment fence, final long stages) {
+    public static void MTLRenderCommandEncoder_updateFence(final MemorySegment encoder, final MemorySegment fence, final long stages) {
         try {
-            this.MTLRenderCommandEncoderUpdateFence.invokeExact(segment(encoder), segment(fence), stages);
+            MTLRenderCommandEncoderUpdateFence.invokeExact(segment(encoder), segment(fence), stages);
         } catch (Throwable throwable) {
             throw bridgeFailure("MTLRenderCommandEncoder_updateFence", throwable);
         }
     }
 
-    public void MTLRenderCommandEncoder_waitForFence(final MemorySegment encoder, final MemorySegment fence, final long stages) {
+    public static void MTLRenderCommandEncoder_waitForFence(final MemorySegment encoder, final MemorySegment fence, final long stages) {
         try {
-            this.MTLRenderCommandEncoderWaitForFence.invokeExact(segment(encoder), segment(fence), stages);
+            MTLRenderCommandEncoderWaitForFence.invokeExact(segment(encoder), segment(fence), stages);
         } catch (Throwable throwable) {
             throw bridgeFailure("MTLRenderCommandEncoder_waitForFence", throwable);
         }
     }
 
-    public void MTLBlitCommandEncoder_updateFence(final MemorySegment encoder, final MemorySegment fence) {
+    public static void MTLBlitCommandEncoder_updateFence(final MemorySegment encoder, final MemorySegment fence) {
         try {
-            this.MTLBlitCommandEncoderUpdateFence.invokeExact(segment(encoder), segment(fence));
+            MTLBlitCommandEncoderUpdateFence.invokeExact(segment(encoder), segment(fence));
         } catch (Throwable throwable) {
             throw bridgeFailure("MTLBlitCommandEncoder_updateFence", throwable);
         }
     }
 
-    public void MTLBlitCommandEncoder_waitForFence(final MemorySegment encoder, final MemorySegment fence) {
+    public static void MTLBlitCommandEncoder_waitForFence(final MemorySegment encoder, final MemorySegment fence) {
         try {
-            this.MTLBlitCommandEncoderWaitForFence.invokeExact(segment(encoder), segment(fence));
+            MTLBlitCommandEncoderWaitForFence.invokeExact(segment(encoder), segment(fence));
         } catch (Throwable throwable) {
             throw bridgeFailure("MTLBlitCommandEncoder_waitForFence", throwable);
         }
     }
 
-    public MemorySegment metallum_get_buffer_contents(final MemorySegment buffer) {
+    public static MemorySegment metallum_get_buffer_contents(final MemorySegment buffer) {
         try {
-            return (MemorySegment) this.getBufferContents.invokeExact(segment(buffer));
+            return (MemorySegment) getBufferContents.invokeExact(segment(buffer));
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_get_buffer_contents", throwable);
         }
     }
 
-    public ByteBuffer nativeByteBufferView(final MemorySegment pointer, final long byteSize) {
+    public static ByteBuffer nativeByteBufferView(final MemorySegment pointer, final long byteSize) {
         if (pointer == null || pointer.address() == 0L) {
             throw new IllegalArgumentException("Cannot create a ByteBuffer view for a null native pointer");
         }

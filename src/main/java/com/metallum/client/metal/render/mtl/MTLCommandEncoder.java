@@ -14,7 +14,7 @@ public abstract class MTLCommandEncoder {
         this.handle = handle;
     }
 
-    MemorySegment handle() {
+    public MemorySegment handle() {
         if (MetalNativeBridge.isNullHandle(this.handle)) {
             throw new IllegalStateException(getClass().getSimpleName() + " is closed");
         }
@@ -25,8 +25,8 @@ public abstract class MTLCommandEncoder {
         if (MetalNativeBridge.isNullHandle(this.handle)) {
             return;
         }
-        MetalNativeBridge.INSTANCE.MTLCommandEncoder_endEncoding(this.handle);
-        MetalNativeBridge.INSTANCE.metallum_release_object(this.handle);
+        MetalNativeBridge.MTLCommandEncoder_endEncoding(this.handle);
+        MetalNativeBridge.metallum_release_object(this.handle);
         this.handle = MemorySegment.NULL;
     }
 }

@@ -34,20 +34,20 @@ class MetalGpuBuffer extends GpuBuffer {
         this.cpuAccessible = isCpuAccessible(usage);
         this.resourceOptions = toMtlResourceOptions(usage);
         this.allocationSize = size;
-        this.nativeHandle = MetalNativeBridge.INSTANCE.metallum_create_buffer(device.metalDeviceHandle(), this.allocationSize, this.resourceOptions);
+        this.nativeHandle = MetalNativeBridge.metallum_create_buffer(device.metalDeviceHandle(), this.allocationSize, this.resourceOptions);
         if (MetalNativeBridge.isNullHandle(this.nativeHandle)) {
             throw new IllegalStateException("Failed to create Metal buffer");
         }
 
         if (this.cpuAccessible) {
-            MemorySegment contents = MetalNativeBridge.INSTANCE.metallum_get_buffer_contents(this.nativeHandle);
+            MemorySegment contents = MetalNativeBridge.metallum_get_buffer_contents(this.nativeHandle);
             if (MetalNativeBridge.isNullHandle(contents)) {
-                MetalNativeBridge.INSTANCE.metallum_release_object(this.nativeHandle);
+                MetalNativeBridge.metallum_release_object(this.nativeHandle);
                 this.nativeHandle = null;
                 throw new IllegalStateException("MTLBuffer.contents returned null");
             }
 
-            this.storage = MetalNativeBridge.INSTANCE.nativeByteBufferView(contents, this.allocationSize).order(ByteOrder.nativeOrder());
+            this.storage = MetalNativeBridge.nativeByteBufferView(contents, this.allocationSize).order(ByteOrder.nativeOrder());
         } else {
             this.storage = null;
         }

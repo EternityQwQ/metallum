@@ -30,7 +30,7 @@ final class MetalGpuTextureView extends GpuTextureView {
             return texture.nativeHandle();
         }
         if (this.nativeHandle == null) {
-            MemorySegment viewHandle = MetalNativeBridge.INSTANCE.metallum_create_texture_view(
+            MemorySegment viewHandle = MetalNativeBridge.metallum_create_texture_view(
                     texture.nativeHandle(),
                     this.baseMipLevel(),
                     this.mipLevels()

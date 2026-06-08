@@ -9,7 +9,7 @@ public final class MTLVertexDescriptor implements AutoCloseable {
     private boolean closed;
 
     public MTLVertexDescriptor() {
-        this.handle = MetalNativeBridge.INSTANCE.metallum_MTLVertexDescriptor_create();
+        this.handle = MetalNativeBridge.metallum_MTLVertexDescriptor_create();
     }
 
     public MemorySegment handle() {
@@ -17,18 +17,18 @@ public final class MTLVertexDescriptor implements AutoCloseable {
     }
 
     public void setAttribute(long index, long format, long offset, long bufferIndex) {
-        MetalNativeBridge.INSTANCE.metallum_MTLVertexDescriptor_setAttribute(this.handle, index, format, offset, bufferIndex);
+        MetalNativeBridge.metallum_MTLVertexDescriptor_setAttribute(this.handle, index, format, offset, bufferIndex);
     }
 
     public void setLayout(long bufferIndex, long stride, MTLVertexStepFunction stepFunction, long stepRate) {
-        MetalNativeBridge.INSTANCE.metallum_MTLVertexDescriptor_setLayout(this.handle, bufferIndex, stride, stepFunction.value, stepRate);
+        MetalNativeBridge.metallum_MTLVertexDescriptor_setLayout(this.handle, bufferIndex, stride, stepFunction.value, stepRate);
     }
 
     @Override
     public void close() {
         if (!this.closed) {
             this.closed = true;
-            MetalNativeBridge.INSTANCE.metallum_release_object(this.handle);
+            MetalNativeBridge.metallum_release_object(this.handle);
         }
     }
 }

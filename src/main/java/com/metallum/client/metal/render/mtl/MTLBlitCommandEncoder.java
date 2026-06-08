@@ -20,7 +20,7 @@ public final class MTLBlitCommandEncoder extends MTLCommandEncoder {
             final long destinationOffset,
             final long length
     ) {
-        MetalNativeBridge.INSTANCE.MTLBlitCommandEncoder_copyFromBufferToBuffer(
+        MetalNativeBridge.MTLBlitCommandEncoder_copyFromBufferToBuffer(
                 handle(), sourceBuffer, sourceOffset, destinationBuffer, destinationOffset, length
         );
     }
@@ -38,7 +38,7 @@ public final class MTLBlitCommandEncoder extends MTLCommandEncoder {
             final long bytesPerRow,
             final long bytesPerImage
     ) {
-        MetalNativeBridge.INSTANCE.MTLBlitCommandEncoder_copyFromBufferToTexture(
+        MetalNativeBridge.MTLBlitCommandEncoder_copyFromBufferToTexture(
                 handle(), sourceBuffer, sourceOffset, texture, mipLevel, slice, x, y, width, height, bytesPerRow, bytesPerImage
         );
     }
@@ -54,7 +54,7 @@ public final class MTLBlitCommandEncoder extends MTLCommandEncoder {
             final long width,
             final long height
     ) {
-        MetalNativeBridge.INSTANCE.MTLBlitCommandEncoder_copyFromTextureToTexture(
+        MetalNativeBridge.MTLBlitCommandEncoder_copyFromTextureToTexture(
                 handle(), sourceTexture, destinationTexture, mipLevel, sourceX, sourceY, destX, destY, width, height
         );
     }
@@ -72,16 +72,16 @@ public final class MTLBlitCommandEncoder extends MTLCommandEncoder {
             final long bytesPerRow,
             final long bytesPerImage
     ) {
-        MetalNativeBridge.INSTANCE.MTLBlitCommandEncoder_copyFromTextureToBuffer(
+        MetalNativeBridge.MTLBlitCommandEncoder_copyFromTextureToBuffer(
                 handle(), sourceTexture, destinationBuffer, destinationOffset, mipLevel, slice, x, y, width, height, bytesPerRow, bytesPerImage
         );
     }
 
     public void updateFence(final MemorySegment fence) {
-        MetalNativeBridge.INSTANCE.MTLBlitCommandEncoder_updateFence(handle(), fence);
+        MetalNativeBridge.MTLBlitCommandEncoder_updateFence(handle(), fence);
     }
 
     public void waitForFence(final MemorySegment fence) {
-        MetalNativeBridge.INSTANCE.MTLBlitCommandEncoder_waitForFence(handle(), fence);
+        MetalNativeBridge.MTLBlitCommandEncoder_waitForFence(handle(), fence);
     }
 }

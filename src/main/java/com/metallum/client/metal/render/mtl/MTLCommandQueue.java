@@ -16,7 +16,7 @@ public final class MTLCommandQueue {
     }
 
     public static MTLCommandQueue create(final MemorySegment device) {
-        MemorySegment handle = MetalNativeBridge.INSTANCE.MTLDevice_makeCommandQueue(device);
+        MemorySegment handle = MetalNativeBridge.MTLDevice_makeCommandQueue(device);
         if (MetalNativeBridge.isNullHandle(handle)) {
             throw new IllegalStateException("Failed to create Metal command queue");
         }
@@ -24,7 +24,7 @@ public final class MTLCommandQueue {
     }
 
     public MTLCommandBuffer makeCommandBuffer(@Nullable final String label) {
-        MemorySegment commandBuffer = MetalNativeBridge.INSTANCE.MTLCommandQueue_makeCommandBuffer(handle, label);
+        MemorySegment commandBuffer = MetalNativeBridge.MTLCommandQueue_makeCommandBuffer(handle, label);
         if (MetalNativeBridge.isNullHandle(commandBuffer)) {
             throw new IllegalStateException("Failed to create MTLCommandBuffer");
         }
@@ -35,7 +35,7 @@ public final class MTLCommandQueue {
         if (MetalNativeBridge.isNullHandle(handle)) {
             return;
         }
-        MetalNativeBridge.INSTANCE.metallum_release_object(handle);
+        MetalNativeBridge.metallum_release_object(handle);
         handle = MemorySegment.NULL;
     }
 }
