@@ -10,6 +10,8 @@ import net.irisshaders.iris.layer.OuterWrappedRenderType;
 import net.irisshaders.iris.mixinterface.ModelStorage;
 import net.irisshaders.iris.vertices.ImmediateState;
 import net.minecraft.client.model.Model;
+import net.minecraft.client.renderer.feature.BlockModelFeatureRenderer;
+import net.minecraft.client.renderer.feature.CustomFeatureRenderer;
 import net.minecraft.client.renderer.feature.ItemFeatureRenderer;
 import net.minecraft.client.renderer.feature.phase.SimpleFeatureRenderPhase;
 import net.minecraft.client.renderer.feature.submit.SubmitNode;
@@ -35,6 +37,19 @@ public class MixinModelStorageTrigger {
 	private <S> void iris$capture(Model<? super S> model, S state, PoseStack poseStack, RenderType renderType, int lightCoords, int overlayCoords, int tintedColor, @org.jspecify.annotations.Nullable TextureAtlasSprite sprite, int outlineColor, ModelFeatureRenderer.@org.jspecify.annotations.Nullable CrumblingOverlay crumblingOverlay, CallbackInfo ci,
 								  @Local ModelFeatureRenderer.Submit<S> submit) {
 		((ModelStorage) (Object) submit).iris$capture();
+	}
+
+	@WrapOperation(method = "submitBlockModel", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/rendertype/RenderType;hasBlending()Z"))
+	private <S> boolean iris$capture6(RenderType instance, Operation<Boolean> original, @Local BlockModelFeatureRenderer.Submit submit) {
+		((ModelStorage) (Object) submit).iris$capture();
+		return instance.hasBlending();
+	}
+
+
+	@WrapOperation(method = "submitCustomGeometry", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/rendertype/RenderType;hasBlending()Z"))
+	private <S> boolean iris$capture7(RenderType instance, Operation<Boolean> original, @Local CustomFeatureRenderer.Submit submit) {
+		((ModelStorage) (Object) submit).iris$capture();
+		return instance.hasBlending();
 	}
 
 	@WrapMethod(method = "submitModel")
