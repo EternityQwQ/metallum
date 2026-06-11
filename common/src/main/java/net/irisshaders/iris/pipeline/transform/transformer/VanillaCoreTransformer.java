@@ -72,6 +72,7 @@ public class VanillaCoreTransformer {
 				""");
 
 		CommonTransformer.transform(t, tree, root, parameters, true);
+		CommonTransformer.replaceMidBlock(t, tree, root, parameters);
 		root.rename("alphaTestRef", "iris_currentAlphaTest");
 		root.replaceReferenceExpressions(t, "modelViewMatrix", "iris_transforms.ModelViewMat");
 		root.replaceReferenceExpressions(t, "gl_ModelViewMatrix", "iris_transforms.ModelViewMat");

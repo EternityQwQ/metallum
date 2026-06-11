@@ -25,6 +25,7 @@ public class SodiumTransformer {
 
 		replaceMidTexCoord(t, tree, root, 1.0f / 32768.0f);
 		replaceMCEntity(t, tree, root);
+		CommonTransformer.replaceMidBlock(t, tree, root, parameters);
 
 		boolean needsNormal = root.identifierIndex.has("gl_Normal") || root.identifierIndex.has("at_tangent");
 

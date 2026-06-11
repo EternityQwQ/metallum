@@ -34,6 +34,7 @@ public class SodiumCoreTransformer {
 			root.replaceReferenceExpressions(t, "textureMatrix", "mat4(1.0)");
 			SodiumTransformer.replaceMidTexCoord(t, tree, root, 1.0f / 32768.0f);
 			SodiumTransformer.replaceMCEntity(t, tree, root);
+			CommonTransformer.replaceMidBlock(t, tree, root, parameters);
 
 			SodiumTransformer.injectVertInit(t, tree, root, parameters, needsNormal);
 		}

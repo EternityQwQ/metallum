@@ -37,7 +37,7 @@ public class IrisVertexFormats {
 			.addAttribute(ENTITY_ATTRIBUTE, GpuFormat.RG16_SINT)
 			.addAttribute(MID_TEXTURE_ATTRIBUTE, GpuFormat.RG32_FLOAT)
 			.addAttribute(TANGENT_ATTRIBUTE, GpuFormat.RGBA8_SNORM)
-			.addAttribute(MID_BLOCK_ATTRIBUTE, 4, GpuFormat.RGB8_SINT)
+			.addAttribute(MID_BLOCK_ATTRIBUTE, GpuFormat.RGBA8_SNORM)
 			.build();
 
 		ENTITY = VertexFormat.builder(0)

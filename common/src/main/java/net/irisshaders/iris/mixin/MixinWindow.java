@@ -2,7 +2,6 @@ package net.irisshaders.iris.mixin;
 
 import com.mojang.blaze3d.opengl.GlBackend;
 import com.mojang.blaze3d.platform.DisplayData;
-import com.mojang.blaze3d.platform.ScreenManager;
 import com.mojang.blaze3d.platform.Window;
 import com.mojang.blaze3d.platform.WindowEventHandler;
 import com.mojang.blaze3d.shaders.GpuDebugOptions;

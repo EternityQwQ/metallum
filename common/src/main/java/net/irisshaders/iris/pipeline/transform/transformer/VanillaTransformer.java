@@ -25,6 +25,7 @@ public class VanillaTransformer {
 		}
 
 		CommonTransformer.transform(t, tree, root, parameters, false);
+		CommonTransformer.replaceMidBlock(t, tree, root, parameters);
 
 		tree.parseAndInjectNodes(t, ASTInjectionPoint.BEFORE_DECLARATIONS,
 			"const float mc_chunkFade = -1.0;",

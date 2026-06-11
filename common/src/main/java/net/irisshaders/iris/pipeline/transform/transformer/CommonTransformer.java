@@ -133,6 +133,59 @@ public class CommonTransformer {
 		}
 	}
 
+	public static void replaceMidBlock(
+		ASTParser t,
+		TranslationUnit tree,
+		Root root,
+		Parameters parameters) {
+		if (parameters.type.glShaderType != ShaderType.VERTEX || !root.identifierIndex.has("at_midBlock")) {
+			return;
+		}
+
+		Type dimension = Type.F32VEC4;
+		for (Identifier id : root.identifierIndex.get("at_midBlock")) {
+			TypeAndInitDeclaration initDeclaration = (TypeAndInitDeclaration) id.getAncestor(
+				2, 0, TypeAndInitDeclaration.class::isInstance);
+			if (initDeclaration == null) {
+				continue;
+			}
+			DeclarationExternalDeclaration declaration = (DeclarationExternalDeclaration) initDeclaration.getAncestor(
+				1, 0, DeclarationExternalDeclaration.class::isInstance);
+			if (declaration == null) {
+				continue;
+			}
+			if (initDeclaration.getType().getTypeSpecifier() instanceof BuiltinNumericTypeSpecifier numeric) {
+				dimension = numeric.type;
+
+				declaration.detachAndDelete();
+				initDeclaration.detachAndDelete();
+				id.detachAndDelete();
+				break;
+			}
+		}
+
+		root.replaceReferenceExpressions(t, "at_midBlock", "iris_MidBlock");
+
+		switch (dimension) {
+			case FLOAT32:
+				tree.parseAndInjectNode(t, ASTInjectionPoint.BEFORE_DECLARATIONS, "float iris_MidBlock = at_midBlock.x * 127.0;");
+				break;
+			case F32VEC2:
+				tree.parseAndInjectNode(t, ASTInjectionPoint.BEFORE_DECLARATIONS, "vec2 iris_MidBlock = at_midBlock.xy * 127.0;");
+				break;
+			case F32VEC3:
+				tree.parseAndInjectNode(t, ASTInjectionPoint.BEFORE_DECLARATIONS, "vec3 iris_MidBlock = at_midBlock.xyz * 127.0;");
+				break;
+			case F32VEC4:
+				tree.parseAndInjectNode(t, ASTInjectionPoint.BEFORE_DECLARATIONS, "vec4 iris_MidBlock = at_midBlock * 127.0;");
+				break;
+			default:
+				throw new IllegalStateException("Got an invalid format at_midBlock (" + dimension.getCompactName() + ").");
+		}
+
+		tree.parseAndInjectNode(t, ASTInjectionPoint.BEFORE_DECLARATIONS, "in vec4 at_midBlock;");
+	}
+
 	public static void upgradeStorageQualifiers(
 		ASTParser t,
 		TranslationUnit tree,
