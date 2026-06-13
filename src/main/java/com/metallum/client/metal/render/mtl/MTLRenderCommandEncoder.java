@@ -41,6 +41,10 @@ public final class MTLRenderCommandEncoder extends MTLCommandEncoder {
         MetalNativeBridge.MTLRenderCommandEncoder_setBuffer(handle(), buffer, offset, index, stageMask);
     }
 
+    public void setBufferOffset(final long offset, final long index, final int stageMask) {
+        MetalNativeBridge.MTLRenderCommandEncoder_setBufferOffset(handle(), offset, index, stageMask);
+    }
+
     public void setTexture(final MemorySegment texture, final long index, final int stageMask) {
         MetalNativeBridge.MTLRenderCommandEncoder_setTexture(handle(), texture, index, stageMask);
     }

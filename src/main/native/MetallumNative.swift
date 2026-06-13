@@ -894,6 +894,16 @@ public func metallum_MTLRenderCommandEncoder_setBuffer(_ encoder: MTLRenderComma
     }
 }
 
+@_cdecl("metallum_MTLRenderCommandEncoder_setBufferOffset")
+public func metallum_MTLRenderCommandEncoder_setBufferOffset(_ encoder: MTLRenderCommandEncoder, _ offset: UInt64, _ index: UInt64, _ stageMask: Int32) {
+    if (stageMask & 1) != 0 {
+        encoder.setVertexBufferOffset(Int(offset), index: Int(index))
+    }
+    if (stageMask & 2) != 0 {
+        encoder.setFragmentBufferOffset(Int(offset), index: Int(index))
+    }
+}
+
 @_cdecl("metallum_MTLRenderCommandEncoder_setTexture")
 public func metallum_MTLRenderCommandEncoder_setTexture(_ encoder: MTLRenderCommandEncoder, _ texture: MTLTexture?, _ index: UInt64, _ stageMask: Int32) {
     if (stageMask & 1) != 0 {

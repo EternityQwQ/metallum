@@ -162,7 +162,7 @@ final class MetalCrossShaderCompiler {
                 case TEXEL_BUFFER -> MetalCompiledRenderPipeline.ResourceKind.TEXEL_BUFFER;
             };
             GpuFormat texelFormat = entry.type() == VulkanBindGroupLayout.VulkanBindGroupEntryType.TEXEL_BUFFER ? entry.texelBufferFormat() : null;
-            resources.add(new MetalCompiledRenderPipeline.ResourceBinding(kind, entry.name(), index, stageMask(entry.name(), kind, index, vertexMsl, fragmentMsl), texelFormat));
+            resources.add(new MetalCompiledRenderPipeline.ResourceBinding(kind, entry.name(), index, stageMask(entry.name(), vertexMsl, fragmentMsl), texelFormat));
         }
 
         int pushConstantStageMask = (vertexMsl.hasPushConstants() ? MetalCompiledRenderPipeline.STAGE_VERTEX : 0)
@@ -181,8 +181,6 @@ final class MetalCrossShaderCompiler {
 
     private static int stageMask(
             final String name,
-            final MetalCompiledRenderPipeline.ResourceKind kind,
-            final int bindingIndex,
             final MslShader vertexMsl,
             final MslShader fragmentMsl
     ) {

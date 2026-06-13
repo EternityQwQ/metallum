@@ -18,8 +18,6 @@ import java.util.Map;
 
 @Environment(EnvType.CLIENT)
 final class MetalCompiledRenderPipeline implements CompiledRenderPipeline, AutoCloseable {
-    private static final int MAIN_VERTEX_BINDING_INDEX = 0;
-
     enum ResourceKind {
         UNIFORM_BUFFER,
         SAMPLED_IMAGE,
@@ -36,7 +34,7 @@ final class MetalCompiledRenderPipeline implements CompiledRenderPipeline, AutoC
 
     private final List<ResourceBinding> resources;
     private final Map<String, ResourceBinding> resourcesByName;
-    private final ResourceBinding[] resourcesByIndex;
+    private final long allResourceMask;
     private final int firstAvailableVertexBufferSlot;
     private final MTLCullMode cullMode;
     private final MTLTriangleFillMode fillMode;
@@ -62,16 +60,15 @@ final class MetalCompiledRenderPipeline implements CompiledRenderPipeline, AutoC
         this.resourcesByName = resources.stream().collect(java.util.stream.Collectors.toUnmodifiableMap(ResourceBinding::name, binding -> binding));
 
         int maxBindingIndex = -1;
+        long resourceMask = 0L;
         for (ResourceBinding binding : resources) {
             maxBindingIndex = Math.max(maxBindingIndex, binding.bindingIndex());
+            resourceMask |= 1L << binding.bindingIndex();
         }
         if (maxBindingIndex >= Long.SIZE) {
             throw new IllegalStateException("Pipeline " + info.getLocation() + " has binding index " + maxBindingIndex + ", limit is " + (Long.SIZE - 1));
         }
-        this.resourcesByIndex = new ResourceBinding[maxBindingIndex + 1];
-        for (ResourceBinding binding : resources) {
-            this.resourcesByIndex[binding.bindingIndex()] = binding;
-        }
+        this.allResourceMask = resourceMask;
 
         this.firstAvailableVertexBufferSlot = firstAvailableVertexBufferSlot(resources);
         this.cullMode = info.isCull() ? MTLCullMode.Back : MTLCullMode.None;
@@ -164,13 +161,13 @@ final class MetalCompiledRenderPipeline implements CompiledRenderPipeline, AutoC
         return this.resources;
     }
 
+    long allResourceMask() {
+        return this.allResourceMask;
+    }
+
     @Nullable
     ResourceBinding resource(final String name) {
         return this.resourcesByName.get(name);
-    }
-
-    ResourceBinding resourceByIndex(final int bindingIndex) {
-        return this.resourcesByIndex[bindingIndex];
     }
 
     int firstAvailableVertexBufferSlot() {

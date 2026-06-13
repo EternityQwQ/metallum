@@ -115,7 +115,7 @@ final class MetalRenderPass implements RenderPassBackend {
     public void bindTexture(final @NonNull String name, @Nullable final GpuTextureView textureView, @Nullable final GpuSampler sampler) {
         if (textureView != null && sampler != null) {
             samplers.put(name, new TextureViewAndSampler(textureView, sampler));
-            commandEncoder.flushPendingClear(MetalCommandEncoder.castTexture(textureView.texture()));
+            commandEncoder.flushPendingClear((MetalGpuTexture) textureView.texture());
             markDescriptorDirty(name);
         } else if (textureView == null && sampler == null) {
             samplers.remove(name);
@@ -183,7 +183,7 @@ final class MetalRenderPass implements RenderPassBackend {
 
     @Override
     public void drawIndexed(final int indexCount, final int instanceCount, final int firstIndex, final int vertexOffset, final int firstInstance) {
-        MetalGpuBuffer nativeIndexBuffer = resolveIndexBuffer();
+        MetalGpuBuffer nativeIndexBuffer = (MetalGpuBuffer) indexBuffer;
         MTLRenderCommandEncoder enc = renderEncoder();
 
         bindDrawState(enc);
@@ -192,7 +192,7 @@ final class MetalRenderPass implements RenderPassBackend {
 
     @Override
     public void multiDrawIndexed(@NonNull IntBuffer drawParameters, int instanceCount, int firstInstance, int drawCount) {
-        MetalGpuBuffer nativeIndexBuffer = resolveIndexBuffer();
+        MetalGpuBuffer nativeIndexBuffer = (MetalGpuBuffer) indexBuffer;
         MTLRenderCommandEncoder enc = renderEncoder();
         bindDrawState(enc);
 
@@ -213,7 +213,7 @@ final class MetalRenderPass implements RenderPassBackend {
             throw new UnsupportedOperationException("Metal backend does not support triangle fan multiDrawIndexed");
         }
 
-        MetalGpuBuffer nativeIndexBuffer = resolveIndexBuffer();
+        MetalGpuBuffer nativeIndexBuffer = (MetalGpuBuffer) indexBuffer;
         MTLRenderCommandEncoder enc = renderEncoder();
         bindDrawState(enc);
 
@@ -237,7 +237,7 @@ final class MetalRenderPass implements RenderPassBackend {
             throw new UnsupportedOperationException("Metal backend does not support triangle fan indirect draws");
         }
 
-        MetalGpuBuffer nativeIndexBuffer = resolveIndexBuffer();
+        MetalGpuBuffer nativeIndexBuffer = (MetalGpuBuffer) indexBuffer;
         MTLRenderCommandEncoder enc = renderEncoder();
         bindDrawState(enc);
 
@@ -245,7 +245,7 @@ final class MetalRenderPass implements RenderPassBackend {
                 primitiveType,
                 indexType,
                 nativeIndexBuffer.nativeHandle(),
-                MetalCommandEncoder.castBuffer(commands.buffer()).nativeHandle(),
+                ((MetalGpuBuffer) commands.buffer()).nativeHandle(),
                 commands.offset(),
                 drawCount,
                 VkDrawIndexedIndirectCommand.SIZEOF
@@ -277,7 +277,7 @@ final class MetalRenderPass implements RenderPassBackend {
             if (scissorDirty || vertexBuffersDirty || dirtyDescriptorMask != 0L || pipelineDirty) {
                 bindDrawState(enc);
             }
-            MetalGpuBuffer nativeIndexBuffer = resolveIndexBuffer();
+            MetalGpuBuffer nativeIndexBuffer = (MetalGpuBuffer) indexBuffer;
             drawIndexedNative(enc, nativeIndexBuffer, draw.firstIndex(), draw.indexCount(), draw.baseVertex(), 1, drawIndexType);
         }
     }
@@ -318,7 +318,7 @@ final class MetalRenderPass implements RenderPassBackend {
 
         enc.drawPrimitivesIndirect(
                 primitiveType,
-                MetalCommandEncoder.castBuffer(commands.buffer()).nativeHandle(),
+                ((MetalGpuBuffer) commands.buffer()).nativeHandle(),
                 commands.offset(),
                 drawCount,
                 VkDrawIndirectCommand.SIZEOF
@@ -372,10 +372,6 @@ final class MetalRenderPass implements RenderPassBackend {
         return commandEncoder.transientMemory().allocateGpuMapped(size, alignment, usage);
     }
 
-    void end() {
-        pipelineDirty = true;
-    }
-
     private void pushVertexBuffers(final MTLRenderCommandEncoder enc) {
         int firstSlot = compiledPipeline.firstAvailableVertexBufferSlot();
         int count = compiledPipeline.vertexBufferCount();
@@ -388,20 +384,10 @@ final class MetalRenderPass implements RenderPassBackend {
                 throw new IllegalStateException("Vertex buffer at slot " + slot + " has been closed");
             }
 
-            MetalGpuBuffer nativeVertexBuffer = MetalCommandEncoder.castBuffer(vertexBuffer.buffer());
+            MetalGpuBuffer nativeVertexBuffer = (MetalGpuBuffer) vertexBuffer.buffer();
             int metalSlot = firstSlot + slot;
             enc.setBuffer(nativeVertexBuffer.nativeHandle(), vertexBuffer.offset(), metalSlot, MetalCompiledRenderPipeline.STAGE_VERTEX);
         }
-    }
-
-    private MetalGpuBuffer resolveIndexBuffer() {
-        if (indexBuffer == null) {
-            throw new IllegalStateException("Missing index buffer");
-        }
-        if (VALIDATION && indexBuffer.isClosed()) {
-            throw new IllegalStateException("Index buffer has been closed");
-        }
-        return MetalCommandEncoder.castBuffer(indexBuffer);
     }
 
     private void drawTriangleFan(MTLRenderCommandEncoder encoder, final int firstVertex, final int vertexCount, final int instanceCount) {
@@ -426,7 +412,7 @@ final class MetalRenderPass implements RenderPassBackend {
                 }
             }
             GpuBufferSlice slice = mapped.slice();
-            encoder.drawIndexedPrimitives(MTLPrimitiveType.Triangle, indexCount, fanIndexType, MetalCommandEncoder.castBuffer(slice.buffer()).nativeHandle(), slice.offset(), Math.max(1, instanceCount), firstVertex);
+            encoder.drawIndexedPrimitives(MTLPrimitiveType.Triangle, indexCount, fanIndexType, ((MetalGpuBuffer) slice.buffer()).nativeHandle(), slice.offset(), Math.max(1, instanceCount), firstVertex);
         }
     }
 
@@ -448,7 +434,7 @@ final class MetalRenderPass implements RenderPassBackend {
                 GpuBufferSlice slice = mapped.slice();
                 enc.drawIndexedPrimitivesTriangleFan(
                         nativeIndexBuffer.nativeHandle(),
-                        MetalCommandEncoder.castBuffer(slice.buffer()).nativeHandle(),
+                        ((MetalGpuBuffer) slice.buffer()).nativeHandle(),
                         slice.offset(),
                         indexType.value,
                         indexOffsetBytes,
@@ -462,14 +448,11 @@ final class MetalRenderPass implements RenderPassBackend {
         }
     }
 
-    private void bindDrawState(
-            final MTLRenderCommandEncoder enc
-    ) {
+    private void bindDrawState(final MTLRenderCommandEncoder enc) {
         if (compiledPipeline == null) {
             throw new IllegalStateException("Pipeline is missing");
         }
 
-        boolean pipelineChanged = false;
         if (pipelineDirty) {
             boolean useDepth = depthAttachmentFormat().value != MTLPixelFormat.Invalid.value;
             MemorySegment pipelineHandle = compiledPipeline.getNativePipeline(useDepth);
@@ -496,7 +479,7 @@ final class MetalRenderPass implements RenderPassBackend {
             enc.setCullMode(compiledPipeline.cullMode());
             enc.setTriangleFillMode(compiledPipeline.fillMode());
 
-            pipelineChanged = true;
+            dirtyDescriptorMask |= compiledPipeline.allResourceMask();
         }
 
         if (scissorDirty) {
@@ -509,15 +492,14 @@ final class MetalRenderPass implements RenderPassBackend {
             vertexBuffersDirty = false;
         }
 
-        if (pipelineChanged) {
+        if (dirtyDescriptorMask != 0) {
             for (MetalCompiledRenderPipeline.ResourceBinding binding : compiledPipeline.resources()) {
-                pushDescriptor(enc, binding);
-            }
-        } else {
-            for (long mask = dirtyDescriptorMask; mask != 0L; mask &= mask - 1L) {
-                pushDescriptor(enc, compiledPipeline.resourceByIndex(Long.numberOfTrailingZeros(mask)));
+                if ((dirtyDescriptorMask & (1L << binding.bindingIndex())) != 0L) {
+                    pushDescriptor(enc, binding);
+                }
             }
         }
+
         dirtyDescriptorMask = 0L;
     }
 
@@ -579,7 +561,11 @@ final class MetalRenderPass implements RenderPassBackend {
             MetalGpuTextureView textureView = (MetalGpuTextureView) textureBinding.textureView();
 
             MetalGpuSampler sampler = (MetalGpuSampler) textureBinding.sampler();
-            enc.setTextureAndSampler(textureView.nativeHandle(), sampler.nativeHandle(), binding.bindingIndex(), binding.stageMask());
+            int index = binding.bindingIndex();
+            int mask = binding.stageMask();
+            if (!commandEncoder.bindingCache().texture(index, textureView.nativeHandle(), sampler.nativeHandle(), mask)) {
+                enc.setTextureAndSampler(textureView.nativeHandle(), sampler.nativeHandle(), index, mask);
+            }
 
             return;
         }
@@ -597,8 +583,16 @@ final class MetalRenderPass implements RenderPassBackend {
             throw new IllegalStateException("Uniform " + binding.name() + " buffer has been closed");
         }
 
-        MetalGpuBuffer uniformBuffer = MetalCommandEncoder.castBuffer(uniformSlice.buffer());
-        enc.setBuffer(uniformBuffer.nativeHandle(), uniformSlice.offset(), binding.bindingIndex(), binding.stageMask());
+        MetalGpuBuffer uniformBuffer = (MetalGpuBuffer) uniformSlice.buffer();
+        int index = binding.bindingIndex();
+        int mask = binding.stageMask();
+        long offset = uniformSlice.offset();
+        switch (commandEncoder.bindingCache().buffer(index, uniformBuffer.nativeHandle(), offset, mask)) {
+            case EncoderBindingCache.OFFSET_ONLY -> enc.setBufferOffset(offset, index, mask);
+            case EncoderBindingCache.FULL -> enc.setBuffer(uniformBuffer.nativeHandle(), offset, index, mask);
+            default -> {
+            }
+        }
     }
 
     private void pushTexelBufferDescriptor(final MTLRenderCommandEncoder enc, final MetalCompiledRenderPipeline.ResourceBinding binding) {
@@ -615,7 +609,7 @@ final class MetalRenderPass implements RenderPassBackend {
             throw new IllegalStateException("Texel buffer " + binding.name() + " is missing a format");
         }
 
-        MetalGpuBuffer texelBuffer = MetalCommandEncoder.castBuffer(texelSlice.buffer());
+        MetalGpuBuffer texelBuffer = (MetalGpuBuffer) texelSlice.buffer();
         long pixelFormat = MTLPixelFormat.from(texelFormat).value;
         int pixelSize = texelFormat.blockSize();
         long texelByteLength = texelSlice.length();
@@ -636,6 +630,7 @@ final class MetalRenderPass implements RenderPassBackend {
         }
 
         enc.setTexture(texelTexture, binding.bindingIndex(), binding.stageMask());
+        commandEncoder.bindingCache().invalidateTexture(binding.bindingIndex());
 
         commandEncoder.queueForDestroy(() -> MetalNativeBridge.metallum_release_object(texelTexture));
     }
