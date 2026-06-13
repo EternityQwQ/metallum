@@ -37,11 +37,6 @@ public final class MetallumMixinConfigPlugin implements IMixinConfigPlugin {
         if (!this.isMacOs) {
             return false;
         }
-        if (mixinClassName.contains(".mixin.optimization.")) {
-            if (FabricLoader.getInstance().isModLoaded("sodium")) {
-                return false;
-            }
-        }
         if (mixinClassName.contains(".mixin.sodium.")) {
             return FabricLoader.getInstance().isModLoaded("sodium");
         }

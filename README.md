@@ -3,6 +3,8 @@ Metallum is an experimental rendering backend for Minecraft on macOS that uses A
 
 This project is still experimental. Performance, stability, and compatibility may vary depending on your system and installed mods. If you encounter bugs, please report them on GitHub.
 
+Compatible with Sodium.
+
 vibecoded as hell
 
 ## Requirements

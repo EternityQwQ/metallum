@@ -1,6 +1,5 @@
 package com.metallum.client.metal.render;
 
-import com.metallum.client.metal.optimization.MetalTerrainFaceCulling;
 import com.metallum.client.metal.render.bridge.MetalNativeBridge;
 import com.metallum.client.metal.render.mtl.*;
 import com.mojang.blaze3d.GpuFormat;
@@ -279,16 +278,6 @@ final class MetalRenderPass implements RenderPassBackend {
                 bindDrawState(enc);
             }
             MetalGpuBuffer nativeIndexBuffer = resolveIndexBuffer();
-            MetalTerrainFaceCulling.VisibleRanges visibleRanges = MetalTerrainFaceCulling.takeVisibleRanges(draw, currentIndexBuffer);
-            if (visibleRanges != null) {
-                for (int range = 0; range < visibleRanges.rangeCount(); range++) {
-                    int indexCount = visibleRanges.indexCount(range);
-                    if (indexCount > 0) {
-                        drawIndexedNative(enc, nativeIndexBuffer, draw.firstIndex() + visibleRanges.firstIndex(range), indexCount, draw.baseVertex(), 1, drawIndexType);
-                    }
-                }
-                continue;
-            }
             drawIndexedNative(enc, nativeIndexBuffer, draw.firstIndex(), draw.indexCount(), draw.baseVertex(), 1, drawIndexType);
         }
     }

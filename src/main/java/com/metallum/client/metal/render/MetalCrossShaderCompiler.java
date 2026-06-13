@@ -1,6 +1,5 @@
 package com.metallum.client.metal.render;
 
-import com.metallum.Metallum;
 import com.mojang.blaze3d.GpuFormat;
 import com.mojang.blaze3d.pipeline.BindGroupLayout;
 import com.mojang.blaze3d.pipeline.BindGroupLayout.UniformDescription;

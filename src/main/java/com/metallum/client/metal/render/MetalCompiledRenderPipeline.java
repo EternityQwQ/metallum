@@ -1,6 +1,5 @@
 package com.metallum.client.metal.render;
 
-import com.metallum.client.metal.optimization.MetalTerrainVertexPacking;
 import com.metallum.client.metal.render.bridge.MetalNativeBridge;
 import com.metallum.client.metal.render.mtl.*;
 import com.mojang.blaze3d.GpuFormat;
@@ -215,8 +214,6 @@ final class MetalCompiledRenderPipeline implements CompiledRenderPipeline, AutoC
             final int firstMetalVertexBufferSlot
     ) {
         VertexFormat[] bindings = pipeline.getVertexFormatBindings();
-        boolean packedTerrain = MetalTerrainVertexPacking.isPackedTerrainPipeline(pipeline.getLocation().toString());
-
         MTLVertexDescriptor vertexDesc = new MTLVertexDescriptor();
         long attrIndex = 0;
 
@@ -228,27 +225,18 @@ final class MetalCompiledRenderPipeline implements CompiledRenderPipeline, AutoC
 
             int metalSlot = firstMetalVertexBufferSlot + i;
 
-            long stride = packedTerrain && i == MAIN_VERTEX_BINDING_INDEX ? MetalTerrainVertexPacking.PACKED_TERRAIN_VERTEX_SIZE : binding.getVertexSize();
+            long stride = binding.getVertexSize();
             long stepRate = binding.getStepRate();
             MTLVertexStepFunction stepFunction = stepRate > 0 ? MTLVertexStepFunction.PerInstance : MTLVertexStepFunction.PerVertex;
             vertexDesc.setLayout(metalSlot, stride, stepFunction, stepRate > 0 ? stepRate : 1);
 
-            if (packedTerrain && i == MAIN_VERTEX_BINDING_INDEX) {
-                long[] packedFormats = MetalTerrainVertexPacking.packedAttributeFormats();
-                long[] packedOffsets = MetalTerrainVertexPacking.packedAttributeOffsets();
-                for (int k = 0; k < packedFormats.length; k++) {
-                    vertexDesc.setAttribute(attrIndex, packedFormats[k], packedOffsets[k], metalSlot);
-                    attrIndex++;
+            for (VertexFormatElement element : binding.getElements()) {
+                MTLVertexFormat format = MTLVertexFormat.from(element.format());
+                if (format == MTLVertexFormat.Invalid) {
+                    throw new IllegalStateException("Unsupported vertex attribute format: " + element.format());
                 }
-            } else {
-                for (VertexFormatElement element : binding.getElements()) {
-                    MTLVertexFormat format = MTLVertexFormat.from(element.format());
-                    if (format == MTLVertexFormat.Invalid) {
-                        throw new IllegalStateException("Unsupported vertex attribute format: " + element.format());
-                    }
-                    vertexDesc.setAttribute(attrIndex, format.value, element.offset(), metalSlot);
-                    attrIndex++;
-                }
+                vertexDesc.setAttribute(attrIndex, format.value, element.offset(), metalSlot);
+                attrIndex++;
             }
         }
 
