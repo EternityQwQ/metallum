@@ -14,7 +14,7 @@ public class IrisVKOnly {
     private static KeyMapping shaderpackScreenKeybind;
 
     public static void run() {
-        shaderpackScreenKeybind = IrisPlatformHelpers.getInstance().registerKeyBinding(new KeyMapping("iris.keybind.shaderPackSelection", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_O, irisKeybindCategory));
+        shaderpackScreenKeybind = IrisPlatformHelpers.getInstance().registerKeyBinding(new KeyMapping("iris.keybind.shaderPackSelection", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_I, irisKeybindCategory));
 
     }
 
