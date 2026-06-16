@@ -14,7 +14,7 @@ import java.util.Collection;
 
 @Mixin(RenderRegionManager.class)
 public class MixinRenderRegionManager {
-	@Redirect(method = "uploadResults(Lnet/caffeinemc/mods/sodium/client/render/chunk/region/RenderRegion;Ljava/util/Collection;)V", at = @At(value = "INVOKE", target = "Lnet/caffeinemc/mods/sodium/client/render/chunk/region/RenderRegion;clearAllCachedBatches()V"))
+	@Redirect(method = "uploadResults(Lnet/caffeinemc/mods/sodium/client/render/chunk/region/RenderRegion;Ljava/util/Collection;Lnet/caffeinemc/mods/sodium/client/render/chunk/UniformBufferManager;)V", at = @At(value = "INVOKE", target = "Lnet/caffeinemc/mods/sodium/client/render/chunk/region/RenderRegion;clearAllCachedBatches()V"))
 	private void iris$forceClear(RenderRegion instance) {
 		((ShadowRenderRegion) instance).iris$forceClearAllBatches();
 	}

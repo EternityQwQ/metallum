@@ -5,6 +5,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.caffeinemc.mods.sodium.client.render.chunk.RenderSection;
 import net.caffeinemc.mods.sodium.client.render.chunk.RenderSectionManager;
+import net.caffeinemc.mods.sodium.client.render.chunk.UniformBufferManager;
 import net.caffeinemc.mods.sodium.client.render.chunk.data.BuiltSectionInfo;
 import net.caffeinemc.mods.sodium.client.render.chunk.lists.DeferredTaskList;
 import net.caffeinemc.mods.sodium.client.render.chunk.lists.SortedRenderLists;
@@ -65,8 +66,6 @@ public abstract class MixinRenderSectionManagerShadow implements ShadowRenderLis
 		throw new AssertionError();
 	}
 
-    @Shadow private MappableRingBuffer uniformData;
-    @Shadow private int uboUpdateFrame;
     @Shadow private SectionTree renderTree;
     @Unique
 	private @NotNull SortedRenderLists shadowRenderLists = SortedRenderLists.empty();
@@ -150,8 +149,6 @@ public abstract class MixinRenderSectionManagerShadow implements ShadowRenderLis
 			this.regularNeedsGraphUpdate = this.needsGraphUpdate;
 			this.regularCameraChanged = this.cameraChanged;
 			this.shadowScopeActive = true;
-            this.regularUbo = this.uniformData;
-            this.regularUboUpdated = this.uboUpdateFrame;
             this.regularTree = this.renderTree;
             this.renderTree = this.shadowTree;
         }
@@ -159,8 +156,6 @@ public abstract class MixinRenderSectionManagerShadow implements ShadowRenderLis
 		this.iris$swapToShadowRenderLists();
 		this.renderLists = this.shadowRenderLists;
 		this.taskLists = this.shadowTaskLists;
-        this.uniformData = this.shadowUbo;
-        this.uboUpdateFrame = this.shadowUboUpdated;
 	}
 
 	@Override
@@ -177,9 +172,6 @@ public abstract class MixinRenderSectionManagerShadow implements ShadowRenderLis
 			this.needsGraphUpdate = this.regularNeedsGraphUpdate;
 			this.cameraChanged = this.regularCameraChanged;
 			this.shadowScopeActive = false;
-            this.uniformData = this.regularUbo;
-            this.shadowUboUpdated = this.uboUpdateFrame;
-            this.uboUpdateFrame = this.regularUboUpdated;
 		}
 	}
 
@@ -234,7 +226,7 @@ public abstract class MixinRenderSectionManagerShadow implements ShadowRenderLis
 	}
 
 	@Inject(method = "processChunkBuilds", at = @At("HEAD"), cancellable = true, remap = false)
-	private void skipChunkBuildProcessingDuringShadow(Viewport viewport, CallbackInfo ci) {
+	private void skipChunkBuildProcessingDuringShadow(Viewport viewport, UniformBufferManager uniforms, CallbackInfo ci) {
 		if (ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
 			ci.cancel();
 		}
@@ -270,8 +262,7 @@ public abstract class MixinRenderSectionManagerShadow implements ShadowRenderLis
 
 	@Redirect(method = {
 		"getRenderLists",
-		"getVisibleChunkCount",
-		"renderLayer"
+		"getVisibleChunkCount"
 	}, at = @At(value = "FIELD", target = "Lnet/caffeinemc/mods/sodium/client/render/chunk/RenderSectionManager;renderLists:Lnet/caffeinemc/mods/sodium/client/render/chunk/lists/SortedRenderLists;"), remap = false)
 	private SortedRenderLists useShadowRenderLists(RenderSectionManager instance) {
 		return ShadowRenderingState.areShadowsCurrentlyBeingRendered() ? this.shadowRenderLists : this.renderLists;

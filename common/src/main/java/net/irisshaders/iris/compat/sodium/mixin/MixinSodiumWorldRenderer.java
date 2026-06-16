@@ -8,6 +8,7 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import net.caffeinemc.mods.sodium.client.render.SodiumWorldRenderer;
 import net.caffeinemc.mods.sodium.client.render.chunk.ChunkRenderMatrices;
 import net.caffeinemc.mods.sodium.client.render.chunk.RenderSectionManager;
+import net.caffeinemc.mods.sodium.client.render.chunk.UniformBufferManager;
 import net.caffeinemc.mods.sodium.client.util.FogParameters;
 import net.irisshaders.iris.mixinterface.ShadowRenderListAccess;
 import net.irisshaders.iris.mixin.LevelRendererAccessor;
@@ -59,6 +60,8 @@ public class MixinSodiumWorldRenderer implements ShadowRenderListAccess {
 	@Shadow(remap = false)
 	private Matrix4f cullMatrix;
 
+	@Shadow
+	private UniformBufferManager uniformBufferManager;
 	@Unique
 	private float lastSunAngle;
 
@@ -115,6 +118,8 @@ public class MixinSodiumWorldRenderer implements ShadowRenderListAccess {
 		if (this.renderSectionManager instanceof ShadowRenderListAccess shadowRenderListAccess) {
 			shadowRenderListAccess.iris$beginShadowRenderListScope();
 		}
+
+		((ShadowRenderListAccess) this.uniformBufferManager).iris$beginShadowRenderListScope();;
 	}
 
 	@Override
@@ -122,6 +127,8 @@ public class MixinSodiumWorldRenderer implements ShadowRenderListAccess {
 		if (this.renderSectionManager instanceof ShadowRenderListAccess shadowRenderListAccess) {
 			shadowRenderListAccess.iris$endShadowRenderListScope();
 		}
+
+		((ShadowRenderListAccess) this.uniformBufferManager).iris$endShadowRenderListScope();;
 
 		if (this.iris$shadowScopeActive) {
 			this.iris$shadowLastCameraPos = this.lastCameraPos;

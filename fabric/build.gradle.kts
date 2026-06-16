@@ -42,6 +42,11 @@ dependencies {
         runtimeOnly(module)
     }
 
+    fun addCompileFabricModule(name: String) {
+        val module = fabricApi.module(name, FABRIC_API_VERSION)
+        compileOnly(module)
+    }
+
     fun addEmbeddedFabricModule(name: String) {
         val module = fabricApi.module(name, FABRIC_API_VERSION)
         implementation(module)
@@ -61,6 +66,7 @@ dependencies {
     addRuntimeFabricModule("fabric-resource-loader-v0")
     addRuntimeFabricModule("fabric-lifecycle-events-v1")
     addRuntimeFabricModule("fabric-renderer-api-v1")
+    addCompileFabricModule("fabric-renderer-api-v1")
 
     implementation(SODIUM_DEPENDENCY_FABRIC)
     implementAndInclude("org.antlr:antlr4-runtime:4.13.1")

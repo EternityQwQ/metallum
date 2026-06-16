@@ -18,7 +18,7 @@ import java.io.IOException;
 
 @Mixin(VideoSettingsScreen.class)
 public class MixinSodiumGameOptions {
-	@WrapOperation(method = "renderIconWithSpacing", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;blit(Lcom/mojang/blaze3d/pipeline/RenderPipeline;Lnet/minecraft/resources/Identifier;IIFFIIIIIII)V"))
+	@WrapOperation(method = "renderIconWithSpacing", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;blit(Lcom/mojang/blaze3d/pipeline/RenderPipeline;Lnet/minecraft/resources/Identifier;IIFFIIIIIII)V"), require = 0)
 	private static void iris$makeColor(GuiGraphicsExtractor instance, RenderPipeline renderPipeline, Identifier identifier, int i, int j, float f, float g, int k, int l, int m, int n, int o, int p, int q, Operation<Void> original) {
 		boolean changed = false;
 		Identifier newIdentifier = identifier;
