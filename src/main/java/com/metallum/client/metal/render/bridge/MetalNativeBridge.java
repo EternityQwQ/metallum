@@ -110,6 +110,24 @@ public final class MetalNativeBridge {
             MTLRenderCommandEncoderSetTexture = downcall(lookup, "metallum_MTLRenderCommandEncoder_setTexture", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, INT));
             MTLRenderCommandEncoderSetTextureAndSampler = downcall(lookup, "metallum_MTLRenderCommandEncoder_setTextureAndSampler", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG, INT));
             MTLRenderCommandEncoderSetScissorRect = downcall(lookup, "metallum_MTLRenderCommandEncoder_setScissorRect", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, LONG, LONG, LONG, LONG));
+            MTLRenderCommandEncoderClearDraw = downcall(
+                    lookup,
+                    "metallum_MTLRenderCommandEncoder_clearDraw",
+                    FunctionDescriptor.ofVoid(
+                            ValueLayout.ADDRESS,
+                            ValueLayout.ADDRESS,
+                            ValueLayout.ADDRESS,
+                            DOUBLE,
+                            DOUBLE,
+                            INT,
+                            FLOAT,
+                            FLOAT,
+                            FLOAT,
+                            FLOAT,
+                            INT,
+                            DOUBLE
+                    )
+            );
             MTLRenderCommandEncoderDrawPrimitives = downcall(lookup, "metallum_MTLRenderCommandEncoder_drawPrimitives", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, LONG, LONG, LONG, LONG));
             MTLRenderCommandEncoderDrawIndexedPrimitives = downcall(
                     lookup,
@@ -278,6 +296,7 @@ public final class MetalNativeBridge {
     private static final MethodHandle MTLRenderCommandEncoderSetTexture;
     private static final MethodHandle MTLRenderCommandEncoderSetTextureAndSampler;
     private static final MethodHandle MTLRenderCommandEncoderSetScissorRect;
+    private static final MethodHandle MTLRenderCommandEncoderClearDraw;
     private static final MethodHandle MTLRenderCommandEncoderDrawPrimitives;
     private static final MethodHandle MTLRenderCommandEncoderDrawIndexedPrimitives;
     private static final MethodHandle MTLRenderCommandEncoderMultiDrawIndexed;
@@ -737,6 +756,40 @@ public final class MetalNativeBridge {
             );
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_MTLCommandBuffer_makeRenderCommandEncoder", throwable);
+        }
+    }
+
+    public static void MTLRenderCommandEncoder_clearDraw(
+            final MemorySegment encoder,
+            final MemorySegment colorTexture,
+            final MemorySegment depthTexture,
+            final double viewportWidth,
+            final double viewportHeight,
+            final int clearColorEnabled,
+            final float clearColorRed,
+            final float clearColorGreen,
+            final float clearColorBlue,
+            final float clearColorAlpha,
+            final int clearDepthEnabled,
+            final double clearDepth
+    ) {
+        try {
+            MTLRenderCommandEncoderClearDraw.invokeExact(
+                    segment(encoder),
+                    segment(colorTexture),
+                    segment(depthTexture),
+                    viewportWidth,
+                    viewportHeight,
+                    clearColorEnabled,
+                    clearColorRed,
+                    clearColorGreen,
+                    clearColorBlue,
+                    clearColorAlpha,
+                    clearDepthEnabled,
+                    clearDepth
+            );
+        } catch (Throwable throwable) {
+            throw bridgeFailure("metallum_MTLRenderCommandEncoder_clearDraw", throwable);
         }
     }
 

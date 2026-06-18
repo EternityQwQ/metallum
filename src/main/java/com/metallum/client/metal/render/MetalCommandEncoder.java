@@ -150,6 +150,21 @@ final class MetalCommandEncoder implements CommandEncoderBackend {
         if (currentEncoder instanceof MTLRenderCommandEncoder enc
                 && MetalPipelineSupport.sameHandle(renderColorAttachment, colorAttachment)
                 && MetalPipelineSupport.sameHandle(renderDepthAttachment, depthAttachment)) {
+            if (clearColorEnabled || clearDepthEnabled) {
+                enc.clearDraw(
+                        colorAttachment,
+                        depthAttachment,
+                        viewportWidth,
+                        viewportHeight,
+                        clearColorEnabled,
+                        clearColorRed,
+                        clearColorGreen,
+                        clearColorBlue,
+                        clearColorAlpha,
+                        clearDepthEnabled,
+                        clearDepthValue
+                );
+            }
             return enc;
         }
 

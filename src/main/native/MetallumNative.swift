@@ -14,6 +14,7 @@ private struct PipelineVariantKey: Hashable {
     let deviceAddress: UInt
     let colorFormat: MTLPixelFormat
     let depthFormat: MTLPixelFormat
+    let writeColor: Bool
 }
 
 private enum NativeState {
@@ -207,7 +208,8 @@ private func encodeClearDraw(
 private func buildClearPipeline(
     device: MTLDevice,
     colorFormat: MTLPixelFormat,
-    depthFormat: MTLPixelFormat = .invalid
+    depthFormat: MTLPixelFormat = .invalid,
+    writeColor: Bool = true
 ) -> MTLRenderPipelineState? {
     do {
         let library = try device.makeLibrary(source: clearMslSource(), options: nil)
@@ -226,6 +228,7 @@ private func buildClearPipeline(
         descriptor.colorAttachments[0].pixelFormat = colorFormat
         descriptor.depthAttachmentPixelFormat = depthFormat
         descriptor.colorAttachments[0].isBlendingEnabled = false
+        descriptor.colorAttachments[0].writeMask = writeColor ? .all : []
 
         return try device.makeRenderPipelineState(descriptor: descriptor)
     } catch {
@@ -272,12 +275,12 @@ private func buildPresentSampler(device: MTLDevice, filter: MTLSamplerMinMagFilt
     return device.makeSamplerState(descriptor: descriptor)
 }
 
-private func ensureClearColorDepthPipeline(_ device: MTLDevice, _ colorFormat: MTLPixelFormat, _ depthFormat: MTLPixelFormat) -> MTLRenderPipelineState? {
-    let key = PipelineVariantKey(deviceAddress: objectAddress(device), colorFormat: colorFormat, depthFormat: depthFormat)
+private func ensureClearColorDepthPipeline(_ device: MTLDevice, _ colorFormat: MTLPixelFormat, _ depthFormat: MTLPixelFormat, _ writeColor: Bool = true) -> MTLRenderPipelineState? {
+    let key = PipelineVariantKey(deviceAddress: objectAddress(device), colorFormat: colorFormat, depthFormat: depthFormat, writeColor: writeColor)
     if let cached = NativeState.clearPipelines[key] {
         return cached
     }
-    let pipeline = buildClearPipeline(device: device, colorFormat: colorFormat, depthFormat: depthFormat)
+    let pipeline = buildClearPipeline(device: device, colorFormat: colorFormat, depthFormat: depthFormat, writeColor: writeColor)
     if let pipeline {
         NativeState.clearPipelines[key] = pipeline
     }
@@ -1168,6 +1171,59 @@ public func metallum_MTLCommandBuffer_clearColorDepthTexturesRegion(
         }
 
         encoder.endEncoding()
+    }
+}
+
+@_cdecl("metallum_MTLRenderCommandEncoder_clearDraw")
+public func metallum_MTLRenderCommandEncoder_clearDraw(
+    _ encoder: MTLRenderCommandEncoder,
+    _ colorTexture: MTLTexture?,
+    _ depthTexture: MTLTexture?,
+    _ viewportWidth: Double,
+    _ viewportHeight: Double,
+    _ clearColorEnabled: Int32,
+    _ clearColorRed: Float,
+    _ clearColorGreen: Float,
+    _ clearColorBlue: Float,
+    _ clearColorAlpha: Float,
+    _ clearDepthEnabled: Int32,
+    _ clearDepth: Double
+) {
+    autoreleasepool {
+        guard let device = colorTexture?.device ?? depthTexture?.device else {
+            return
+        }
+        let colorFormat = colorTexture?.pixelFormat ?? .invalid
+        let depthFormat = depthTexture?.pixelFormat ?? .invalid
+        let writeColor = clearColorEnabled != 0
+
+        guard let pipeline = ensureClearColorDepthPipeline(device, colorFormat, depthFormat, writeColor) else {
+            return
+        }
+
+        let depthState: MTLDepthStencilState?
+        if depthFormat != .invalid {
+            depthState = ensureDepthStencilState(device: device, compareOp: .always, writeDepth: clearDepthEnabled != 0)
+        } else {
+            depthState = nil
+        }
+
+        let width = colorTexture?.width ?? depthTexture?.width ?? 0
+        let height = colorTexture?.height ?? depthTexture?.height ?? 0
+        guard width > 0, height > 0 else {
+            return
+        }
+
+        encodeClearDraw(
+            encoder: encoder,
+            pipeline: pipeline,
+            textureWidth: Int(viewportWidth),
+            textureHeight: Int(viewportHeight),
+            clearColor: SIMD4<Float>(clearColorRed, clearColorGreen, clearColorBlue, clearColorAlpha),
+            scissorRect: MTLScissorRect(x: 0, y: 0, width: width, height: height),
+            depthState: depthState,
+            clearDepth: clearDepth
+        )
     }
 }
 

@@ -42,8 +42,8 @@ final class MetalRenderPass implements RenderPassBackend {
     private final GpuTextureView depthTexture;
     private final RenderPass.RenderArea renderArea;
     @Nullable
-    private final Vector4fc clearColor;
-    private final boolean clearDepthEnabled;
+    private Vector4fc clearColor;
+    private boolean clearDepthEnabled;
     private final double clearDepthValue;
     private final ScissorState scissorState = new ScissorState();
     private final GpuBufferSlice[] vertexBuffers = new GpuBufferSlice[MAX_VERTEX_BUFFERS];
@@ -353,19 +353,24 @@ final class MetalRenderPass implements RenderPassBackend {
     private MTLRenderCommandEncoder renderEncoder() {
         MetalGpuTextureView colorTextureView = (MetalGpuTextureView) colorTexture;
         MetalGpuTextureView depthTextureView = depthTexture == null ? null : (MetalGpuTextureView) depthTexture;
-        return commandEncoder.renderCommandEncoder(
+        boolean clearColorNow = clearColor != null;
+        boolean clearDepthNow = clearDepthEnabled;
+        MTLRenderCommandEncoder encoder = commandEncoder.renderCommandEncoder(
                 colorTextureView,
                 depthTextureView,
                 colorTexture.getWidth(0),
                 colorTexture.getHeight(0),
-                clearColor != null,
-                clearColor != null ? clearColor.x() : 0.0F,
-                clearColor != null ? clearColor.y() : 0.0F,
-                clearColor != null ? clearColor.z() : 0.0F,
-                clearColor != null ? clearColor.w() : 0.0F,
-                clearDepthEnabled,
+                clearColorNow,
+                clearColorNow ? clearColor.x() : 0.0F,
+                clearColorNow ? clearColor.y() : 0.0F,
+                clearColorNow ? clearColor.z() : 0.0F,
+                clearColorNow ? clearColor.w() : 0.0F,
+                clearDepthNow,
                 clearDepthValue
         );
+        clearColor = null;
+        clearDepthEnabled = false;
+        return encoder;
     }
 
     GpuBufferSlice.MappedView allocateTransient(final long size, final long alignment, @GpuBuffer.Usage final int usage) {
