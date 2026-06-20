@@ -280,6 +280,7 @@ public class CompositeRenderer {
 		var type = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS).type();
 
 		FullScreenQuadRenderer.INSTANCE.bind();
+		GlStateManager._colorMask(15);
 
 		for (int i = 0, passesSize = passes.size(); i < passesSize; i++) {
 			Pass compositePass = passes.get(i);
