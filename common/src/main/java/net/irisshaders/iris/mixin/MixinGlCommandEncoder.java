@@ -1,21 +1,17 @@
 package net.irisshaders.iris.mixin;
 
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
 import com.mojang.blaze3d.opengl.GlCommandEncoder;
 import com.mojang.blaze3d.opengl.GlConst;
 import com.mojang.blaze3d.opengl.GlProgram;
 import com.mojang.blaze3d.opengl.GlRenderPass;
 import com.mojang.blaze3d.opengl.GlStateManager;
-import com.mojang.blaze3d.opengl.GlTexture;
-import com.mojang.blaze3d.opengl.Uniform;
 import com.mojang.blaze3d.pipeline.BlendFunction;
 import com.mojang.blaze3d.pipeline.DepthStencilState;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.systems.ScissorState;
-import com.mojang.blaze3d.textures.FilterMode;
-import com.mojang.blaze3d.textures.GpuTextureView;
-import it.unimi.dsi.fastutil.ints.IntList;
 import net.irisshaders.iris.Iris;
 import net.irisshaders.iris.gl.blending.DepthColorStorage;
 import net.irisshaders.iris.pipeline.IrisRenderingPipeline;
@@ -98,6 +94,12 @@ public class MixinGlCommandEncoder {
 		}
 	}
 
+
+	@WrapOperation(method = "applyPipelineState", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/pipeline/RenderPipeline;isCull()Z"))
+	private boolean iris$redirectCull(RenderPipeline instance, Operation<Boolean> original) {
+		return !ShadowRenderingState.areShadowsCurrentlyBeingRendered() && original.call(instance);
+	}
+
 	@Unique
 	private static GlRenderPass lastPass;
 
@@ -147,7 +149,7 @@ public class MixinGlCommandEncoder {
 					GlStateManager._disablePolygonOffset();
 				}
 
-				if (pipeline.isCull()) {
+				if (pipeline.isCull() && !ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
 					GlStateManager._enableCull();
 				} else {
 					GlStateManager._disableCull();
