@@ -54,9 +54,9 @@ public class IrisVertexFormats {
 
 		GLYPH = VertexFormat.builder(0)
 			.addAttribute("Position", GpuFormat.RGB32_FLOAT)
-			.addAttribute("Color", GpuFormat.RGBA8_UNORM)
 			.addAttribute("UV0", GpuFormat.RG32_FLOAT)
 			.addAttribute("UV2", GpuFormat.RG16_SINT)
+			.addAttribute("Color", GpuFormat.RGBA8_UNORM)
 			.addAttribute("Normal", GpuFormat.RGBA8_SNORM)
 			.addAttribute(ENTITY_ID_ATTRIBUTE, GpuFormat.RGBA16_UINT)
 			.addAttribute(MID_TEXTURE_ATTRIBUTE, GpuFormat.RG32_FLOAT)
