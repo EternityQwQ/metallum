@@ -1,8 +1,10 @@
 package net.irisshaders.iris.compat.sodium.mixin;
 
+import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import net.caffeinemc.mods.sodium.client.render.chunk.UniformBufferManager;
 import net.irisshaders.iris.mixinterface.ShadowRenderListAccess;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.renderer.DynamicUniformStorage;
 import net.minecraft.client.renderer.MappableRingBuffer;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -15,14 +17,18 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(UniformBufferManager.class)
 public class MixinUniformData implements ShadowRenderListAccess {
+	@Shadow
+	private boolean hasUpdatedThisFrame;
 	@Mutable
 	@Shadow
 	@Final
-	private MappableRingBuffer uniformData;
+	private DynamicUniformStorage<?> uniformStorage;
 	@Shadow
-	private boolean hasUpdatedThisFrame;
+	private GpuBufferSlice uniformData;
 	@Unique
-	private MappableRingBuffer shadowUbo;
+	private DynamicUniformStorage<?> shadowUbo;
+	@Unique
+	private GpuBufferSlice shadowUboSlice;
 
 	@Unique
 	private boolean shadowUboFrame;
@@ -32,7 +38,13 @@ public class MixinUniformData implements ShadowRenderListAccess {
 
 	@Inject(method = "<init>", at = @At("RETURN"))
 	private void iris$init(ClientLevel level, int renderDistance, CallbackInfo ci) {
-		this.shadowUbo = new MappableRingBuffer(() -> "Sodium uniform buffer (shadow map)", 130, 256);
+		this.shadowUbo = new DynamicUniformStorage("Sodium terrain uniforms (Shadow)", 256, 8);
+	}
+
+	@Inject(method = "endFrame", at = @At("HEAD"))
+	private void iris$endFrame(CallbackInfo ci) {
+		this.shadowUboSlice = null;
+		this.shadowUbo.endFrame();
 	}
 
 	@Override
@@ -40,9 +52,13 @@ public class MixinUniformData implements ShadowRenderListAccess {
 		if (isSwappedToShadow) return;
 		isSwappedToShadow = true;
 
-		var x = this.uniformData;
-		this.uniformData = shadowUbo;
+		var x = this.uniformStorage;
+		this.uniformStorage = shadowUbo;
 		this.shadowUbo = x;
+
+		var z = this.uniformData;
+		this.uniformData = shadowUboSlice;
+		this.shadowUboSlice = z;
 
 		var y = this.hasUpdatedThisFrame;
 		this.hasUpdatedThisFrame = this.shadowUboFrame;
@@ -54,9 +70,13 @@ public class MixinUniformData implements ShadowRenderListAccess {
 		if (!isSwappedToShadow) return;
 		isSwappedToShadow = false;
 
-		var x = this.uniformData;
-		this.uniformData = this.shadowUbo;
+		var x = this.uniformStorage;
+		this.uniformStorage = this.shadowUbo;
 		this.shadowUbo = x;
+
+		var z = this.uniformData;
+		this.uniformData = shadowUboSlice;
+		this.shadowUboSlice = z;
 
 		var y = this.hasUpdatedThisFrame;
 		this.hasUpdatedThisFrame = this.shadowUboFrame;

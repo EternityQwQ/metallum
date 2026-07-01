@@ -1,6 +1,6 @@
 plugins {
     id("idea")
-    id("net.neoforged.moddev") version "2.0.140"
+    id("net.neoforged.moddev") version "2.0.141"
     id("java-library")
 }
 
@@ -139,6 +139,9 @@ dependencies {
 
     compileOnly(SODIUM_DEPENDENCY_NEO)
     runtimeOnly(SODIUM_DEPENDENCY_NEO)
+    if (SODIUM_DEPENDENCY_NEO is String) {
+        runtimeOnly((SODIUM_DEPENDENCY_NEO as String).replace("-mod", ""))
+    }
     includeAdditional("io.github.douira:glsl-transformer:3.0.0-pre3")
     includeAdditional("org.anarres:jcpp:1.4.14")
     includeAdditional("org.antlr:antlr4-runtime:4.13.1")

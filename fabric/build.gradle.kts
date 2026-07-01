@@ -15,6 +15,7 @@ val MOD_VERSION: String by rootProject.extra
 
 repositories {
     mavenLocal()
+    maven("https://maven.caffeinemc.net/releases")
     exclusiveContent {
         forRepository {
             maven {
