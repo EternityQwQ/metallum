@@ -31,7 +31,7 @@ public final class MetalNativeBridge {
      * linked into the launcher binary. We detect that environment and avoid the
      * temp-file extraction path used on macOS.
      */
-    static boolean isIOS() {
+    public static boolean isIOS() {
         String osName = System.getProperty("os.name", "");
         String osArch = System.getProperty("os.arch", "");
         if (osName.toLowerCase().contains("ios")) {
