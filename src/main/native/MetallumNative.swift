@@ -409,9 +409,9 @@ public func metallum_NSWindow_backingScaleFactor(_ window: MetallumWindow) -> Do
     #if os(macOS)
     return Double(window.backingScaleFactor)
     #elseif os(iOS)
-    // UIWindow on iOS does not expose backingScaleFactor directly; the on-screen
-    // scale is determined by UIScreen.main.scale (or the window's screen).
-    return Double(window.screen?.scale ?? UIScreen.main.scale)
+    // UIWindow on iOS does not expose backingScaleFactor directly; the
+    // on-screen scale is determined by the window's UIScreen.
+    return Double(window.screen.scale)
     #endif
 }
 
