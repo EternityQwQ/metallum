@@ -67,14 +67,22 @@ tasks.register("buildIOSNative", Exec) {
 			return false
 		}
 		// `xcrun --sdk iphoneos --show-sdk-path` can exit 0 while only emitting
-		// a "no such SDK: iphoneos" warning on stderr, which would let the task
-		// run and then fail inside swiftc. Verify the reported path actually
-		// exists on disk before attempting to compile.
+		// a "no such SDK: iphoneos" warning on stderr (or even stdout), which
+		// would let the task run and then fail inside swiftc. Verify the
+		// reported path actually exists on disk and looks like an iOS SDK
+		// before attempting to compile. Use consumeProcessOutput to avoid
+		// deadlocking on a full stderr pipe.
+		def out = new StringBuilder()
+		def err = new StringBuilder()
 		def proc = ["xcrun", "--sdk", "iphoneos", "--show-sdk-path"].execute()
-		def out = proc.inputStream.text.trim()
-		def err = proc.errorStream.text.trim()
+		proc.consumeProcessOutput(out, err)
 		proc.waitFor()
-		return proc.exitValue() == 0 && !out.empty && !err.contains("no such SDK") && new File(out).isDirectory()
+		def path = out.toString().trim()
+		return proc.exitValue() == 0
+			&& !path.empty
+			&& !err.toString().toLowerCase().contains("no such sdk")
+			&& !path.toLowerCase().contains("no such sdk")
+			&& new File(path).isDirectory()
 	}
 
 	workingDir project.projectDir
