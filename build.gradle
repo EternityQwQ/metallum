@@ -63,10 +63,18 @@ tasks.register("buildMacNative", Exec) {
 // is not macOS or if the iOS SDK is unavailable.
 tasks.register("buildIOSNative", Exec) {
 	onlyIf {
-		org.gradle.internal.os.OperatingSystem.current().isMacOsX() &&
-			[
-				"xcrun", "--sdk", "iphoneos", "--show-sdk-path"
-			].execute().waitFor() == 0
+		if (!org.gradle.internal.os.OperatingSystem.current().isMacOsX()) {
+			return false
+		}
+		// `xcrun --sdk iphoneos --show-sdk-path` can exit 0 while only emitting
+		// a "no such SDK: iphoneos" warning on stderr, which would let the task
+		// run and then fail inside swiftc. Verify the reported path actually
+		// exists on disk before attempting to compile.
+		def proc = ["xcrun", "--sdk", "iphoneos", "--show-sdk-path"].execute()
+		def out = proc.inputStream.text.trim()
+		def err = proc.errorStream.text.trim()
+		proc.waitFor()
+		return proc.exitValue() == 0 && !out.empty && !err.contains("no such SDK") && new File(out).isDirectory()
 	}
 
 	workingDir project.projectDir
