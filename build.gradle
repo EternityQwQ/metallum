@@ -61,55 +61,54 @@ tasks.register("buildMacNative", Exec) {
 //
 // Requires Xcode with an iOS toolchain. Skipped automatically if the host
 // is not macOS or if the iOS SDK is unavailable.
-tasks.register("buildIOSNative", Exec) {
-	onlyIf {
-		if (!org.gradle.internal.os.OperatingSystem.current().isMacOsX()) {
-			return false
-		}
-		// `xcrun --sdk iphoneos --show-sdk-path` is unreliable on hosts that
-		// only have the Command Line Tools (or an Xcode without the iOS
-		// platform): it may exit 0 and print a fallback path, or print a
-		// warning to stderr in a format that does not literally contain
-		// "no such SDK". Either way swiftc would then fail with
-		// "unable to load standard library for target 'arm64-apple-ios14.0'".
-		//
-		// Require ALL of: zero exit, no stderr output at all, a non-empty
-		// stdout path that contains "iPhoneOS" (the canonical platform name),
-		// and that path being an existing directory.
-		def out = new StringBuilder()
-		def err = new StringBuilder()
-		def proc = ["xcrun", "--sdk", "iphoneos", "--show-sdk-path"].execute()
-		proc.waitForProcessOutput(out, err)
-		def path = out.toString().trim()
-		def errStr = err.toString().trim()
-		return proc.exitValue() == 0
-			&& errStr.empty
-			&& !path.empty
-			&& path.contains("iPhoneOS")
-			&& new File(path).isDirectory()
+//
+// Note: swiftc's `-sdk` flag does NOT resolve SDK names through xcrun the
+// way `-target` does; passing the literal "iphoneos" makes swiftc look for
+// a *directory* named "iphoneos" and fail with "no such sysroot directory".
+// We must resolve the full SDK path ourselves via xcrun and pass that.
+
+def iosSdkPath = {
+	if (!org.gradle.internal.os.OperatingSystem.current().isMacOsX()) {
+		return null
 	}
+	def out = new ByteArrayOutputStream()
+	def err = new ByteArrayOutputStream()
+	def proc = ["xcrun", "--sdk", "iphoneos", "--show-sdk-path"].execute()
+	proc.waitForProcessOutput(out, err)
+	def path = out.toString().trim()
+	def errStr = err.toString().trim()
+	if (proc.exitValue() == 0 && errStr.empty && !path.empty
+		&& path.contains("iPhoneOS") && new File(path).isDirectory()) {
+		return path
+	}
+	return null
+}()
+
+tasks.register("buildIOSNative", Exec) {
+	onlyIf { iosSdkPath != null }
 
 	workingDir project.projectDir
 	doFirst {
 		file("src/main/resources/natives/ios").mkdirs()
 	}
 
-	// Note: -target arm64-apple-ios14.0 requires the iOS SDK to be installed.
 	// The dylib is built with `-static`-style linking of the Swift stdlib so it
 	// can be loaded directly via dlopen on a jailbroken/signable device.
-	commandLine "swiftc",
-		"-O",
-		"-whole-module-optimization",
-		"-emit-library",
-		"-module-name", "metallum_native",
-		"-target", "arm64-apple-ios14.0",
-		"-sdk", "iphoneos",
-		"-framework", "Foundation",
-		"-framework", "Metal",
-		"-framework", "QuartzCore",
-		"-framework", "UIKit",
-		"-o", "src/main/resources/natives/ios/libmetallum.dylib",
-		"src/main/native/MetallumNative.swift"
+	if (iosSdkPath != null) {
+		commandLine "swiftc",
+			"-O",
+			"-whole-module-optimization",
+			"-emit-library",
+			"-module-name", "metallum_native",
+			"-target", "arm64-apple-ios14.0",
+			"-sdk", iosSdkPath,
+			"-framework", "Foundation",
+			"-framework", "Metal",
+			"-framework", "QuartzCore",
+			"-framework", "UIKit",
+			"-o", "src/main/resources/natives/ios/libmetallum.dylib",
+			"src/main/native/MetallumNative.swift"
+	}
 }
 
 tasks.named("processResources") {
