@@ -76,12 +76,14 @@ private func textureSliceCount(_ texture: MTLTexture) -> Int {
 }
 
 private func stencilPixelFormat(for depthFormat: MTLPixelFormat) -> MTLPixelFormat {
-    switch depthFormat {
-    case .depth24Unorm_stencil8, .depth32Float_stencil8:
-        return depthFormat
-    default:
-        return .invalid
-    }
+    let isStencil: Bool = {
+        #if os(macOS)
+        return depthFormat == .depth24Unorm_stencil8 || depthFormat == .depth32Float_stencil8
+        #else
+        return depthFormat == .depth32Float_stencil8
+        #endif
+    }()
+    return isStencil ? depthFormat : .invalid
 }
 
 private func makeClearColor(red: Float, green: Float, blue: Float, alpha: Float) -> MTLClearColor {
@@ -435,15 +437,16 @@ public func metallum_NSView_setMetalLayer(
     view.wantsLayer = true
     view.layer = layer
     #elseif os(iOS)
-    // UIView is layer-backed by default; just assign the metal layer.
-    view.layer = layer
+    // UIView.layer is get-only; host the CAMetalLayer as a sublayer of
+    // the view's existing backing layer instead of replacing it.
+    view.layer.sublayers = [layer]
     #endif
 }
 
 @_cdecl("metallum_NSView_clearLayer")
 public func metallum_NSView_clearLayer(_ view: MetallumView) {
-    view.layer = nil
     #if os(macOS)
+    view.layer = nil
     view.wantsLayer = false
     #endif
 }
@@ -455,7 +458,15 @@ public func metallum_set_debug_labels_enabled(_ enabled: Int32) {
 
 @_cdecl("metallum_MTLDevice_maxMemoryAllocationSize")
 public func metallum_MTLDevice_maxMemoryAllocationSize(_ device: MTLDevice) -> UInt64 {
-    min(UInt64(device.maxBufferLength), device.recommendedMaxWorkingSetSize)
+    let maxBuffer = UInt64(device.maxBufferLength)
+    #if os(iOS)
+    if #available(iOS 16.0, *) {
+        return min(maxBuffer, device.recommendedMaxWorkingSetSize)
+    }
+    return maxBuffer
+    #else
+    return min(maxBuffer, device.recommendedMaxWorkingSetSize)
+    #endif
 }
 
 @_cdecl("metallum_MTLDevice_makeCommandQueue")
@@ -1160,7 +1171,14 @@ public func metallum_MTLCommandBuffer_clearColorDepthTexturesRegion(
         renderPass.depthAttachment.storeAction = .store
 
         let depthFormat = depthTexture.pixelFormat
-        if depthFormat == .depth24Unorm_stencil8 || depthFormat == .depth32Float_stencil8 {
+        let isStencilFormat: Bool = {
+            #if os(macOS)
+            return depthFormat == .depth24Unorm_stencil8 || depthFormat == .depth32Float_stencil8
+            #else
+            return depthFormat == .depth32Float_stencil8
+            #endif
+        }()
+        if isStencilFormat {
             renderPass.stencilAttachment.texture = depthTexture
             renderPass.stencilAttachment.loadAction = .dontCare
             renderPass.stencilAttachment.storeAction = .dontCare
@@ -1261,7 +1279,9 @@ public func metallum_configure_layer(_ layer: CAMetalLayer, _ width: Double, _ h
     layer.drawableSize = CGSize(width: width, height: height)
     layer.allowsNextDrawableTimeout = false
     layer.presentsWithTransaction = false
+    #if os(macOS)
     layer.displaySyncEnabled = immediatePresentMode == 0
+    #endif
 }
 
 @_cdecl("metallum_MTLCommandBuffer_encodePresentTextureToDrawable")
