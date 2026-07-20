@@ -1,7 +1,7 @@
 ## Metallum
 Metallum is an experimental rendering backend for Minecraft on macOS and iOS that uses Apple's Metal API instead of OpenGL/Vulkan. It provides a more native rendering path and aims to improve performance and efficiency on Apple Silicon and iOS devices.
 
-On macOS, the Metal rendering backend is loaded directly via the native bridge. On iOS, the precompiled iOS dylib (`libmetallum.dylib`, arm64, target iOS 14.0+) is included in the jar and intended to be consumed by [Amethyst-iOS](https://github.com/AngelAuraMC/Amethyst-iOS) (a fork of PojavLauncher_iOS).
+On macOS, the Metal rendering backend is loaded directly via the native bridge. On iOS, the precompiled iOS dylib (`libmetallum.dylib`, arm64, target iOS 14.0+) is included in the jar and intended to be consumed by [Amethyst-iOS](https://github.com/AngelAuraMC/Amethyst-iOS) .
 
 This project is still experimental. Performance, stability, and compatibility may vary depending on your system and installed mods. If you encounter bugs, please report them on GitHub.
 
