@@ -13,6 +13,7 @@ import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.List;
 
 @Environment(EnvType.CLIENT)
 public final class MetalNativeBridge {
@@ -361,7 +362,38 @@ public final class MetalNativeBridge {
             }
             Files.copy(stream, tempLib, StandardCopyOption.REPLACE_EXISTING);
         }
+        // iOS forbids dlopen of unsigned dylibs from writable tmp directories.
+        // PojavLauncher / Amethyst ship `ldid`, which we use to ad-hoc sign the
+        // extracted dylib so amfid accepts it on devices with relaxed library
+        // validation (TrollStore, jailbreak). On macOS `codesign -s -` plays
+        // the same role and is a no-op there since macOS already accepts the
+        // extracted dylib.
+        adHocSign(tempLib);
         return SymbolLookup.libraryLookup(tempLib, Arena.global());
+    }
+
+    private static void adHocSign(Path libPath) {
+        // Try ldid first (iOS / PojavLauncher environment), then codesign (macOS).
+        // Both are best-effort: if neither is available we leave the file as-is
+        // and let libraryLookup surface whatever error the kernel returns.
+        String[] ldidCandidates = isIOS()
+            ? new String[] { "ldid", "/usr/bin/ldid", "/usr/local/bin/ldid", "/var/jb/usr/bin/ldid" }
+            : new String[] { "codesign" };
+        for (String signer : ldidCandidates) {
+            try {
+                List<String> cmd = "codesign".equals(signer)
+                    ? List.of(signer, "-s", "-", libPath.toString())
+                    : List.of(signer, "-S", libPath.toString());
+                Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
+                p.getInputStream().readAllBytes();
+                int code = p.waitFor();
+                if (code == 0) {
+                    return;
+                }
+            } catch (Exception ignored) {
+                // Try the next signer.
+            }
+        }
     }
 
 
