@@ -13,7 +13,6 @@ import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.List;
 
 @Environment(EnvType.CLIENT)
 public final class MetalNativeBridge {
@@ -293,67 +292,103 @@ public final class MetalNativeBridge {
      */
     private static SymbolLookup createSymbolLookup() throws IOException {
         if (isIOS()) {
-            // Try loading the embedded, signed dylib from the app bundle's
-            // Frameworks directory first (PojavLauncher/Amethyst supports this).
-            try {
-                System.loadLibrary("metallum");
-            } catch (UnsatisfiedLinkError ignoredFirst) {
-                // The launcher may ship the binary under a different soname.
-                try {
-                    System.loadLibrary("metallum_native");
-                } catch (UnsatisfiedLinkError ignoredSecond) {
-                    // Fall through to loaderLookup; the symbols may already be
-                    // present in the launcher's main executable.
-                }
-            }
-            SymbolLookup loader = SymbolLookup.loaderLookup();
-            // Sanity check: if no metallum symbols are visible, we cannot proceed.
-            if (loader.find("metallum_create_system_default_device").isPresent()) {
-                return loader;
-            }
-            // Try dlopen from candidate Frameworks paths inside the app bundle.
-            // dlopen honors @executable_path / @loader_path tokens, which resolve
-            // to the directory containing the main executable (the app bundle root).
-            // The dylib must be signed with the app's signing identity for dlopen
-            // to succeed on iOS — this is the supported deployment path.
-            for (String candidate : new String[] {
-                    "@executable_path/Frameworks/libmetallum.dylib",
-                    "@loader_path/Frameworks/libmetallum.dylib",
-                    "@executable_path/Frameworks/libmetallum_native.dylib",
-                    "@loader_path/Frameworks/libmetallum_native.dylib"
-            }) {
-                try {
-                    SymbolLookup bundle = SymbolLookup.libraryLookup(candidate, Arena.global());
-                    if (bundle.find("metallum_create_system_default_device").isPresent()) {
-                        return bundle;
-                    }
-                } catch (IllegalArgumentException ignored) {
-                    // dlopen rejected this candidate; try the next.
-                }
-            }
-            // Last resort: extract from the jar. This only works on developer
-            // devices where unsigned dylibs can be loaded from writable tmp
-            // directories (e.g. ad-hoc signed via ldid and run with relaxed
-            // amfid). On a stock non-jailbroken device this will fail.
-            try {
-                return extractFromResource(IOS_RESOURCE_PATH);
-            } catch (IllegalArgumentException e) {
-                throw new IllegalStateException(
-                    "Could not load the Metallum native bridge on iOS.\n" +
-                    "The iOS dylib must be embedded in the launcher app bundle's\n" +
-                    "Frameworks/ directory and signed with the app's signing\n" +
-                    "identity. Extract natives/ios/libmetallum.dylib from the\n" +
-                    "Metallum jar, place it at\n" +
-                    "  <Amethyst.app>/Frameworks/libmetallum.dylib\n" +
-                    "and re-sign the app (e.g. via TrollStore or codesign).\n" +
-                    "See README.md -> iOS Installation for details.",
-                    e);
-            }
+            return createIOSSymbolLookup();
         }
-        return extractFromResource(MACOS_RESOURCE_PATH);
+        return extractAndLoad(MACOS_RESOURCE_PATH);
     }
 
-    private static SymbolLookup extractFromResource(String resourcePath) throws IOException {
+    /**
+     * iOS native loading, modelled on how Amethyst-iOS (PojavLauncher fork)
+     * loads ALL of its own natives:
+     *
+     * <ol>
+     *   <li>{@code System.loadLibrary} searches {@code java.library.path},
+     *       which Amethyst sets to {@code <bundle>/Frameworks/}. This is the
+     *       supported deployment path — the dylib is pre-signed at IPA build
+     *       time and lives inside the signed app bundle.</li>
+     *   <li>{@code SymbolLookup.loaderLookup()} then exposes the symbols from
+     *       any library loaded via the JVM's standard loader.</li>
+     *   <li>If the dylib is not in Frameworks (e.g. shipped only inside the
+     *       Metallum jar), extract it to a writable directory and load it via
+     *       {@code System.load}. Amethyst installs a fishhook'd
+     *       {@code hooked_dlopen} (see Amethyst {@code Natives/main_hook.m})
+     *       that recognises paths under {@code $HOME} or {@code $TMPDIR} and,
+     *       together with the in-memory dyld {@code mmap}/{@code fcntl} bypass
+     *       ({@code Natives/dyld_bypass_validation.m}), allows unsigned dylibs
+     *       from those directories to load when JIT is enabled (TrollStore /
+     *       jailbreak). {@code System.load} routes through the JVM's
+     *       {@code JVM_LoadLibrary} → {@code dlopen}, which is the exact path
+     *       Amethyst's hooks are built around — using it instead of FFM's
+     *       {@code libraryLookup} ensures the hooked {@code dlopen} is invoked.
+     *       There is NO {@code ldid} binary bundled in Amethyst, so ad-hoc
+     *       signing the extracted file would be a no-op; the dyld bypass is
+     *       the only mechanism that makes tmp extraction work.</li>
+     * </ol>
+     */
+    private static SymbolLookup createIOSSymbolLookup() throws IOException {
+        // 1. Try the app bundle's Frameworks/ directory via java.library.path.
+        try {
+            System.loadLibrary("metallum");
+        } catch (UnsatisfiedLinkError first) {
+            try {
+                System.loadLibrary("metallum_native");
+            } catch (UnsatisfiedLinkError second) {
+                // Not in Frameworks; fall through.
+            }
+        }
+        SymbolLookup loader = SymbolLookup.loaderLookup();
+        if (loader.find("metallum_create_system_default_device").isPresent()) {
+            return loader;
+        }
+
+        // 2. Extract to a writable directory and System.load it. Amethyst's
+        //    hooked_dlopen recognises $HOME and $TMPDIR paths, so try both.
+        //    $HOME / $POJAV_HOME is the PojavLauncher data directory and is the
+        //    primary location Amethyst's own hook checks.
+        UnsatisfiedLinkError lastError = null;
+        for (String dirProperty : new String[] { "pojav.launcher.home", "POJAV_HOME", "user.home", "java.io.tmpdir" }) {
+            String dir = System.getProperty(dirProperty);
+            if (dir == null || dir.isEmpty()) continue;
+            Path dirPath = Path.of(dir);
+            if (!Files.isDirectory(dirPath)) continue;
+            try {
+                Path lib = dirPath.resolve("libmetallum.dylib");
+                try (InputStream stream = MetalNativeBridge.class.getResourceAsStream(IOS_RESOURCE_PATH)) {
+                    if (stream == null) {
+                        throw new IllegalStateException("Missing native library resource: " + IOS_RESOURCE_PATH);
+                    }
+                    Files.copy(stream, lib, StandardCopyOption.REPLACE_EXISTING);
+                }
+                lib.toFile().deleteOnExit();
+                System.load(lib.toString());
+                loader = SymbolLookup.loaderLookup();
+                if (loader.find("metallum_create_system_default_device").isPresent()) {
+                    return loader;
+                }
+            } catch (IOException | UnsatisfiedLinkError e) {
+                lastError = e instanceof UnsatisfiedLinkError ? (UnsatisfiedLinkError) e : null;
+                // Try the next directory.
+            }
+        }
+
+        throw new IllegalStateException(
+            "Could not load the Metallum native bridge on iOS.\n" +
+            "Tried: System.loadLibrary (Frameworks/), System.load from\n" +
+            "$POJAV_HOME / $HOME / $TMPDIR — all failed.\n" +
+            (lastError != null ? "Last loader error: " + lastError.getMessage() + "\n" : "") +
+            "\nThe iOS dylib must either:\n" +
+            "  (a) be embedded in the Amethyst app bundle at\n" +
+            "      <Amethyst.app>/Frameworks/libmetallum.dylib and signed at\n" +
+            "      IPA build time (the supported path — Amethyst loads all its\n" +
+            "      natives this way via java.library.path); OR\n" +
+            "  (b) the device must have JIT enabled (TrollStore / jailbreak)\n" +
+            "      so Amethyst's dyld library-validation bypass can load the\n" +
+            "      unsigned dylib extracted from the jar.\n" +
+            "See README.md -> iOS Installation for details.",
+            lastError);
+    }
+
+    private static SymbolLookup extractAndLoad(String resourcePath) throws IOException {
         Path tempLib = Files.createTempFile("metallum-native-", ".dylib");
         tempLib.toFile().deleteOnExit();
         try (InputStream stream = MetalNativeBridge.class.getResourceAsStream(resourcePath)) {
@@ -362,38 +397,7 @@ public final class MetalNativeBridge {
             }
             Files.copy(stream, tempLib, StandardCopyOption.REPLACE_EXISTING);
         }
-        // iOS forbids dlopen of unsigned dylibs from writable tmp directories.
-        // PojavLauncher / Amethyst ship `ldid`, which we use to ad-hoc sign the
-        // extracted dylib so amfid accepts it on devices with relaxed library
-        // validation (TrollStore, jailbreak). On macOS `codesign -s -` plays
-        // the same role and is a no-op there since macOS already accepts the
-        // extracted dylib.
-        adHocSign(tempLib);
         return SymbolLookup.libraryLookup(tempLib, Arena.global());
-    }
-
-    private static void adHocSign(Path libPath) {
-        // Try ldid first (iOS / PojavLauncher environment), then codesign (macOS).
-        // Both are best-effort: if neither is available we leave the file as-is
-        // and let libraryLookup surface whatever error the kernel returns.
-        String[] ldidCandidates = isIOS()
-            ? new String[] { "ldid", "/usr/bin/ldid", "/usr/local/bin/ldid", "/var/jb/usr/bin/ldid" }
-            : new String[] { "codesign" };
-        for (String signer : ldidCandidates) {
-            try {
-                List<String> cmd = "codesign".equals(signer)
-                    ? List.of(signer, "-s", "-", libPath.toString())
-                    : List.of(signer, "-S", libPath.toString());
-                Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
-                p.getInputStream().readAllBytes();
-                int code = p.waitFor();
-                if (code == 0) {
-                    return;
-                }
-            } catch (Exception ignored) {
-                // Try the next signer.
-            }
-        }
     }
 
 
