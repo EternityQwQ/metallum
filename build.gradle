@@ -230,6 +230,32 @@ tasks.register("buildIOSSpvc") {
 			spvcOutput.withOutputStream { outs -> outs << ins }
 		}
 		logger.lifecycle("[buildIOSSpvc] Built libspvc.dylib -> ${spvcOutput}")
+
+		// 4. Verify MSL backend is actually compiled in. The C API's
+		//    spvc_context_create_compiler switch has `case SPVC_BACKEND_MSL:`
+		//    wrapped in `#if SPIRV_CROSS_C_API_MSL`. If the macro wasn't defined
+		//    at build time (e.g. SPIRV_CROSS_ENABLE_MSL didn't propagate), the
+		//    case is absent and runtime calls fail with -4 "Invalid backend".
+		//    When MSL is enabled, the dylib contains CompilerMSL symbols and
+		//    the "spvc_compiler_msl_*" C API entry points.
+		try {
+			def out = new ByteArrayOutputStream()
+			def proc = ["nm", "-gU", builtLib.absolutePath].execute()
+			proc.waitForProcessOutput(out, null)
+			def nmOutput = out.toString()
+			def hasMslSymbols = nmOutput.contains("CompilerMSL") || nmOutput.contains("spvc_compiler_msl")
+			logger.lifecycle("[buildIOSSpvc] MSL backend symbols present: ${hasMslSymbols}")
+			if (!hasMslSymbols) {
+				throw new GradleException(
+						"[buildIOSSpvc] FATAL: libspvc.dylib was built WITHOUT MSL backend support. " +
+						"spvc_context_create_compiler(SPVC_BACKEND_MSL) will fail at runtime with -4. " +
+						"Check that SPIRV_CROSS_ENABLE_MSL=ON propagated to the spirv-cross-c-shared target. " +
+						"nm output excerpt: " + nmOutput.substring(0, Math.min(nmOutput.length(), 500))
+				)
+			}
+		} catch (IOException ignored) {
+			logger.lifecycle("[buildIOSSpvc] nm not available, skipping MSL symbol verification")
+		}
 	}
 }
 
