@@ -144,7 +144,10 @@ tasks.register("buildIOSSpvc") {
 		// Helper: run a command and throw on failure
 		def runCmd = { List<String> cmd, File workDir = null ->
 			logger.lifecycle("[buildIOSSpvc] Running: " + cmd.join(" "))
-			def pb = new ProcessBuilder(cmd)
+			// Groovy list literals are ArrayList<Object>; ProcessBuilder needs List<String>
+			def strCmd = new ArrayList<String>(cmd.size())
+			for (String s : cmd) strCmd.add(s)
+			def pb = new ProcessBuilder(strCmd)
 			if (workDir != null) pb.directory(workDir)
 			pb.redirectErrorStream(true)
 			def proc = pb.start()
