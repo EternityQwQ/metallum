@@ -577,8 +577,7 @@ public func metallum_ios_get_view_metal_layer(
         view.layer.sublayers = [newLayer]
         return retainedPointer(newLayer)
     }
-    NSLog("[Metallum] Using existing view.layer as CAMetalLayer (frame=%@, contentsScale=%f, drawsAsynchronously=%@)",
-          NSStringFromCGRect(layer.frame), layer.contentsScale, layer.drawsAsynchronously ? "YES" : "NO")
+    NSLog("[Metallum] Using existing view.layer as CAMetalLayer (frame=\(layer.frame), contentsScale=\(layer.contentsScale), drawsAsynchronously=\(layer.drawsAsynchronously ? "YES" : "NO"))")
     layer.device = device
     layer.framebufferOnly = true
     layer.isOpaque = true
