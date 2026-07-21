@@ -81,16 +81,6 @@ Amethyst-iOS-MyRemastered 已通过 [PR #67](https://github.com/herbrine8403/Ame
 2. 启动 Minecraft，在视频设置中将图形后端选择为 "Prefer Metal"
 3. 需要与其他 Fabric 模组配合使用时，确保 Sodium 版本兼容（`mc26.2-0.9.0-fabric`）
 
-## 技术依赖
-
-| 依赖 | 版本 |
-|------|------|
-| Minecraft | 26.2（对应 1.21.x 快照） |
-| Fabric Loader | >= 0.19.2 |
-| Sodium | mc26.2-0.9.0-fabric |
-| Java | >= 25 |
-| Fabric Loom | 1.16-SNAPSHOT |
-
 ## 许可
 
 MIT License — 详见 [LICENSE](LICENSE)
