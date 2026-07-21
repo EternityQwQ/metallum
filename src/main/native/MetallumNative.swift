@@ -429,24 +429,22 @@ public func metallum_ios_find_surface_view() -> UnsafeMutableRawPointer? {
 /// only returns a static variable, so it's thread-safe without main-thread
 /// dispatch.
 private func callSurfaceViewControllerSurface() -> UnsafeMutableRawPointer? {
-    guard let cls = objc_getClass("SurfaceViewController") else {
+    guard let cls = NSClassFromString("SurfaceViewController") as? NSObject.Type else {
         NSLog("[Metallum] SurfaceViewController class not found")
         return nil
     }
-    let sel = sel_registerName("surface")
-    // Check the class actually responds to this selector.
-    let responds = class_respondsToSelector(cls, sel)
-    if !responds {
+    let sel = NSSelectorFromString("surface")
+    if !cls.responds(to: sel) {
         NSLog("[Metallum] SurfaceViewController does not respond to 'surface'")
         return nil
     }
-    let msgSend = objc_msgSend as (@convention(c) (AnyClass, Selector) -> AnyObject?)
-    guard let view = msgSend(cls, sel) else {
+    guard let result = cls.perform(sel) else {
         NSLog("[Metallum] +[SurfaceViewController surface] returned nil")
         return nil
     }
+    let view = result.takeUnretainedValue()
     NSLog("[Metallum] +[SurfaceViewController surface] returned \(view)")
-    return Unmanaged.passUnretained(view).toOpaque()
+    return Unmanaged.passUnretained(view as AnyObject).toOpaque()
 }
 
 private func findViewInHierarchy() -> UnsafeMutableRawPointer? {
