@@ -37,6 +37,12 @@ public class MetalBackend implements GpuBackend {
     public @NonNull GpuDevice createDevice(
             final long window, final @NonNull ShaderSource defaultShaderSource, final @NonNull GpuDebugOptions debugOptions, final @NonNull Runnable criticalShaderLoader
     ) throws BackendCreationException {
+        // iOS: 必须在任何 Spvc 类加载之前设置 Configuration.SPVC_LIBRARY_NAME，
+        // 否则 LWJGL 会通过 dlsym(RTLD_DEFAULT) 拿到 MoltenVK 的精简版 SPIRV-Cross
+        // 符号（无 MSL 后端），导致 spvc_context_create_compiler(SPVC_BACKEND_MSL)
+        // 失败 -4 "Invalid backend"。详见 MetalNativeBridge.ensureSpvcLibraryConfigured。
+        MetalNativeBridge.ensureSpvcLibraryConfigured();
+
         MemorySegment deviceHandle;
         MemorySegment cocoaWindow;
         MemorySegment cocoaView;

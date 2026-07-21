@@ -4,6 +4,7 @@ import com.metallum.client.metal.render.mtl.*;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import org.jspecify.annotations.Nullable;
+import org.lwjgl.system.Configuration;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -59,6 +60,99 @@ public final class MetalNativeBridge {
         return osName.toLowerCase().contains("darwin")
                 && osArch.toLowerCase().contains("aarch64")
                 && !osName.toLowerCase().contains("mac");
+    }
+
+    /**
+     * 在 iOS 上确保完整版 libspvc.dylib（带 MSL 后端）被加载并设置到
+     * {@link org.lwjgl.system.Configuration#SPVC_LIBRARY_NAME}。
+     *
+     * <p>背景：Amethyst-iOS 捆绑的 libMoltenVK.dylib 内部静态链接了 SPIRV-Cross，
+     * 但只编译了 Vulkan 后端（MoltenVK 自己用 C++ API 做 SPIR-V→MSL 转换，不需要 C API
+     * 的 MSL 后端）。LWJGL 的 Spvc 类在 iOS 上没有自己的 natives，回退到
+     * dlsym(RTLD_DEFAULT, ...) 时找到的是 MoltenVK 的精简版符号，导致
+     * spvc_context_create_compiler(SPVC_BACKEND_MSL) 返回 -4 "Invalid backend"。
+     *
+     * <p>修复：在 LWJGL 的 Spvc 类被首次加载之前，从 jar 中抽取完整版 libspvc.dylib
+     * （带 MSL 后端），用 System.load 加载（经 Amethyst 的 hooked dlopen），然后设置
+     * Configuration.SPVC_LIBRARY_NAME 指向该路径。LWJGL 加载时会用该绝对路径直接
+     * dlopen，dlsym(handle, ...) 只查询该镜像的符号，不会被 MoltenVK 抢占。
+     *
+     * <p><b>关键：必须在 Spvc 类首次初始化前调用。</b> Spvc.SPVC 是 static final 字段，
+     * 在类初始化时通过 Library.loadNative(...) 读取 Configuration.SPVC_LIBRARY_NAME
+     * 并缓存结果。一旦 Spvc 类被加载，后续修改 Configuration.SPVC_LIBRARY_NAME 无效。
+     * 因此本方法必须在任何可能触发 Spvc 类加载的代码（如 MetalCrossShaderCompiler、
+     * VulkanBackend）之前调用。MetalBackend.createDevice 是 Metal 后端的最早入口点，
+     * 在此处调用可保证早于 precompilePipeline 和 VulkanBackend 回退。
+     *
+     * <p>幂等：多次调用安全，只会真正加载一次。
+     */
+    private static volatile boolean spvcConfigured = false;
+
+    public static void ensureSpvcLibraryConfigured() {
+        if (spvcConfigured) return;
+        synchronized (MetalNativeBridge.class) {
+            if (spvcConfigured) return;
+            if (!isIOS()) {
+                spvcConfigured = true;
+                return;
+            }
+            try {
+                configureBundledSpvcLibrary();
+            } catch (Throwable t) {
+                // 记录但不抛出：即使配置失败，也允许后续代码尝试 LWJGL 默认加载
+                System.err.println("[MetalNativeBridge] Failed to configure bundled libspvc.dylib: " + t);
+                t.printStackTrace(System.err);
+            } finally {
+                spvcConfigured = true;
+            }
+        }
+    }
+
+    /**
+     * 从 jar 中抽取完整版 libspvc.dylib 并设置 LWJGL Configuration.SPVC_LIBRARY_NAME。
+     * 库文件位于 jar 的 /natives/ios/libspvc.dylib，由 build.gradle 的 buildIOSSpvc
+     * 任务从 SPIRV-Cross 源码编译（启用 C API + MSL 后端）。
+     */
+    private static void configureBundledSpvcLibrary() throws IOException {
+        String resourcePath = "/natives/ios/libspvc.dylib";
+        try (InputStream stream = MetalNativeBridge.class.getResourceAsStream(resourcePath)) {
+            if (stream == null) {
+                System.err.println("[MetalNativeBridge] libspvc.dylib not found in jar (" + resourcePath
+                        + "); falling back to LWJGL default. On iOS this likely means MoltenVK's "
+                        + "stripped SPIRV-Cross will be used (no MSL backend).");
+                return;
+            }
+            // 抽取到可写目录（与 createIOSSymbolLookup 相同的策略）
+            Path tempLib = null;
+            IOException lastError = null;
+            for (String dirProperty : new String[]{"pojav.launcher.home", "POJAV_HOME", "user.home", "java.io.tmpdir"}) {
+                String dir = System.getProperty(dirProperty);
+                if (dir == null || dir.isBlank()) continue;
+                Path dirPath = Path.of(dir);
+                if (!Files.isDirectory(dirPath)) continue;
+                try {
+                    tempLib = dirPath.resolve("libspvc_metallum.dylib");
+                    Files.copy(stream, tempLib, StandardCopyOption.REPLACE_EXISTING);
+                    break;
+                } catch (IOException e) {
+                    lastError = e;
+                    tempLib = null;
+                }
+            }
+            if (tempLib == null) {
+                if (lastError != null) throw lastError;
+                throw new IOException("No writable directory available for libspvc.dylib extraction");
+            }
+            tempLib.toFile().deleteOnExit();
+
+            // System.load 经 Amethyst 的 hooked dlopen 加载（能绕过 iOS 代码签名）
+            System.load(tempLib.toString());
+            // 让 LWJGL 在 Spvc 类初始化时用该绝对路径直接 dlopen，避免
+            // dlsym(RTLD_DEFAULT) 被 MoltenVK 抢占
+            Configuration.SPVC_LIBRARY_NAME.set(tempLib.toString());
+            System.out.println("[MetalNativeBridge] Configured Configuration.SPVC_LIBRARY_NAME="
+                    + tempLib + " (bundled libspvc.dylib with MSL backend)");
+        }
     }
 
     static {
