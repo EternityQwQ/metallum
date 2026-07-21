@@ -282,6 +282,14 @@ public final class MetalNativeBridge {
             MTLRenderCommandEncoderWaitForFence = downcallWithoutCritical(lookup, "MTLRenderCommandEncoder_waitForFence", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, LONG));
             MTLBlitCommandEncoderUpdateFence = downcall(lookup, "MTLBlitCommandEncoder_updateFence", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
             MTLBlitCommandEncoderWaitForFence = downcallWithoutCritical(lookup, "MTLBlitCommandEncoder_waitForFence", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+            // metallum_ios_find_surface_view only exists in the iOS build of
+            // the dylib (guarded by #if os(iOS) in Swift). Register it only on
+            // iOS so the macOS build does not fail with a missing symbol.
+            if (isIOS() && lookup.find("metallum_ios_find_surface_view").isPresent()) {
+                iosFindSurfaceView = downcall(lookup, "metallum_ios_find_surface_view", FunctionDescriptor.of(ValueLayout.ADDRESS));
+            } else {
+                iosFindSurfaceView = null;
+            }
         } catch (IOException e) {
             throw new IllegalStateException("Failed to load Metal native bridge", e);
         }
@@ -487,6 +495,7 @@ public final class MetalNativeBridge {
     private static final MethodHandle MTLBlitCommandEncoderUpdateFence;
     private static final MethodHandle MTLBlitCommandEncoderWaitForFence;
     private static final MethodHandle initPipelines;
+    private static final MethodHandle iosFindSurfaceView; // null on macOS
 
 
     private static MethodHandle downcall(final SymbolLookup lookup, final String symbol, final FunctionDescriptor descriptor) {
@@ -544,6 +553,23 @@ public final class MetalNativeBridge {
             NSViewClearLayer.invokeExact(segment(view));
         } catch (Throwable throwable) {
             throw bridgeFailure("metallum_NSView_clearLayer", throwable);
+        }
+    }
+
+    /**
+     * On iOS, locates the host launcher's game surface {@code UIView} via the
+     * Objective-C runtime (calls {@code +[SurfaceViewController surface]} on
+     * Amethyst/PojavLauncher, with a key-window view-hierarchy fallback).
+     * Returns {@code null} on macOS or if the surface view cannot be found.
+     */
+    public static MemorySegment metallum_ios_find_surface_view() {
+        if (iosFindSurfaceView == null) {
+            return MemorySegment.NULL;
+        }
+        try {
+            return (MemorySegment) iosFindSurfaceView.invokeExact();
+        } catch (Throwable throwable) {
+            throw bridgeFailure("metallum_ios_find_surface_view", throwable);
         }
     }
 

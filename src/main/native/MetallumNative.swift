@@ -384,6 +384,59 @@ public func metallum_create_system_default_device() -> UnsafeMutableRawPointer? 
     }
 }
 
+#if os(iOS)
+/// Locates the host launcher's game surface UIView on iOS without requiring
+/// the host to publish a pointer via a system property.
+///
+/// Amethyst-iOS (and PojavLauncher_iOS) expose the surface view through the
+/// `SurfaceViewController` class method `+ surface`, which returns the
+/// `GameSurfaceView` instance backing the game. We resolve it via the ObjC
+/// runtime so Metallum (loaded as a separate dylib) does not need a compile-
+/// time dependency on the launcher's headers.
+@_cdecl("metallum_ios_find_surface_view")
+public func metallum_ios_find_surface_view() -> UnsafeMutableRawPointer? {
+    // SurfaceViewController is an Amethyst/PojavLauncher class. Look it up
+    // at runtime via the ObjC runtime; if Amethyst isn't the host (e.g. a
+    // future launcher without this class), fall back to walking the key
+    // window's view hierarchy for the largest subview.
+    if let cls = objc_getClass("SurfaceViewController") {
+        // +[SurfaceViewController surface]
+        let selector = sel_registerName("surface")
+        if let clsObj = cls as? AnyObject,
+           let view = clsObj.perform(selector)?.takeUnretainedValue() {
+            return Unmanaged.passUnretained(view as AnyObject).toOpaque()
+        }
+    }
+    // Fallback: the most deeply nested large UIView under the key window.
+    if let keyWindow = UIApplication.shared.connectedScenes
+        .compactMap({ $0 as? UIWindowScene })
+        .flatMap({ $0.windows })
+        .first(where: { $0.isKeyWindow }) ?? UIApplication.shared.connectedScenes
+        .compactMap({ $0 as? UIWindowScene })
+        .flatMap({ $0.windows }).first,
+       let root = keyWindow.rootViewController?.view {
+        return findLargestSubview(root)
+    }
+    return nil
+}
+
+private func findLargestSubview(_ view: UIView) -> UnsafeMutableRawPointer {
+    var largest = view
+    var largestArea = view.bounds.width * view.bounds.height
+    for sub in view.subviews {
+        let area = sub.bounds.width * sub.bounds.height
+        if area > largestArea {
+            largestArea = area
+            largest = sub
+        }
+    }
+    if largest !== view && !largest.subviews.isEmpty {
+        return findLargestSubview(largest)
+    }
+    return Unmanaged.passUnretained(largest).toOpaque()
+}
+#endif
+
 @_cdecl("metallum_copy_device_name")
 public func metallum_copy_device_name(
     _ device: MTLDevice,

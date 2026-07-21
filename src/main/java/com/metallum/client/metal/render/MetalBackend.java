@@ -109,9 +109,22 @@ public class MetalBackend implements GpuBackend {
             raw = System.getProperty("pojav.view.pointer");
         }
         if (raw == null || raw.isBlank()) {
+            // Amethyst-iOS does not publish the UIView pointer as a system
+            // property. Resolve it directly via the ObjC runtime instead:
+            // metallum_ios_find_surface_view calls +[SurfaceViewController surface]
+            // (with a key-window view-hierarchy fallback) to locate the host
+            // launcher's GameSurfaceView. This is the supported path on
+            // Amethyst/PojavLauncher_iOS.
+            MemorySegment nativeView = MetalNativeBridge.metallum_ios_find_surface_view();
+            if (!MetalNativeBridge.isNullHandle(nativeView)) {
+                return nativeView;
+            }
             throw new BackendCreationException(
-                    "On iOS the host launcher must expose the UIView pointer via the "
-                            + "'metallum.ios.view.pointer' (or 'pojav.view.pointer') system property",
+                    "Could not locate the iOS surface view. Neither the "
+                            + "'metallum.ios.view.pointer'/'pojav.view.pointer' system property "
+                            + "nor the +[SurfaceViewController surface] class method returned a UIView. "
+                            + "If you are using a launcher other than Amethyst/PojavLauncher, set "
+                            + "'-Dmetallum.ios.view.pointer=<hex>' to the UIView address.",
                     BackendCreationException.Reason.OTHER
             );
         }
