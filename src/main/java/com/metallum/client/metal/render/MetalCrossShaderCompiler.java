@@ -1,5 +1,6 @@
 package com.metallum.client.metal.render;
 
+import com.metallum.Metallum;
 import com.mojang.blaze3d.GpuFormat;
 import com.mojang.blaze3d.pipeline.BindGroupLayout;
 import com.mojang.blaze3d.pipeline.BindGroupLayout.UniformDescription;
@@ -281,19 +282,57 @@ final class MetalCrossShaderCompiler {
     private static MslShader spirvToMsl(final ByteBuffer spirvBytes, final int pushConstantBinding, final Map<String, GpuFormat> attributeFormats) throws ShaderCompileException {
         try (MemoryStack stack = MemoryStack.stackPush()) {
             IntBuffer spirvWords = spirvBytes.asIntBuffer();
+            int wordCount = spirvWords.remaining();
+
+            // SPIR-V 二进制必须至少包含 5 个字（头部：magic、version、generator、bound、schema）。
+            // 空或过短的 SPIR-V 会导致 spvc_context_parse_spirv 在某些版本中行为不确定。
+            if (wordCount < 5) {
+                throw new ShaderCompileException(
+                        "SPIR-V is too small: " + wordCount + " words (minimum 5 required). " +
+                        "ByteBuffer remaining=" + spirvBytes.remaining() + " byteOrder=" + spirvBytes.order()
+                );
+            }
+
+            // 记录 SPIR-V magic 和版本，用于诊断字节序/版本问题
+            int magic = spirvWords.get(0);
+            int version = spirvWords.get(1);
+            Metallum.LOGGER.debug("[MetalCross] SPIR-V: {} words, magic=0x{}, version=0x{}",
+                    wordCount, Integer.toHexString(magic), Integer.toHexString(version));
 
             PointerBuffer pContext = stack.mallocPointer(1);
             checkSpvc(Spvc.spvc_context_create(pContext), "spvc_context_create");
             long context = pContext.get(0);
             try {
                 PointerBuffer pIr = stack.mallocPointer(1);
-                checkSpvc(Spvc.spvc_context_parse_spirv(context, spirvWords, spirvWords.remaining(), pIr), "spvc_context_parse_spirv");
+                checkSpvc(Spvc.spvc_context_parse_spirv(context, spirvWords, wordCount, pIr), "spvc_context_parse_spirv");
+
+                long ir = pIr.get(0);
+                if (ir == 0L) {
+                    // spvc_context_parse_spirv 返回了成功但未写入 IR 指针。
+                    // 这通常表示加载的 libspvc.dylib 版本与 LWJGL 绑定不匹配，
+                    // 或者 MoltenVK 导出的 spvc_ 符号覆盖了 LWJGL 的实现。
+                    String lastError = Spvc.spvc_context_get_last_error_string(context);
+                    throw new ShaderCompileException(
+                            "spvc_context_parse_spirv returned SPVC_SUCCESS but parsed_ir is NULL. " +
+                            "This indicates a version mismatch between the loaded libspvc.dylib and LWJGL's Java bindings, " +
+                            "or symbol interposition from another library (e.g. libMoltenVK.dylib). " +
+                            "SPIR-V: " + wordCount + " words, magic=0x" + Integer.toHexString(magic) + ". " +
+                            "Last error: " + lastError
+                    );
+                }
 
                 PointerBuffer pCompiler = stack.mallocPointer(1);
-                checkSpvc(
-                        Spvc.spvc_context_create_compiler(context, Spvc.SPVC_BACKEND_MSL, pIr.get(0), Spvc.SPVC_CAPTURE_MODE_COPY, pCompiler),
-                        "spvc_context_create_compiler"
+                int createCompilerResult = Spvc.spvc_context_create_compiler(
+                        context, Spvc.SPVC_BACKEND_MSL, ir, Spvc.SPVC_CAPTURE_MODE_COPY, pCompiler
                 );
+                if (createCompilerResult != Spvc.SPVC_SUCCESS) {
+                    String lastError = Spvc.spvc_context_get_last_error_string(context);
+                    throw new ShaderCompileException(
+                            "SPIRV-Cross error at spvc_context_create_compiler: " + createCompilerResult +
+                            " (context=0x" + Long.toHexString(context) + ", ir=0x" + Long.toHexString(ir) +
+                            ", backend=MSL, mode=COPY). Last error: " + lastError
+                    );
+                }
                 long compiler = pCompiler.get(0);
 
                 PointerBuffer pOptions = stack.mallocPointer(1);
