@@ -37,12 +37,28 @@ public final class MetalNativeBridge {
         if (osName.toLowerCase().contains("ios")) {
             return true;
         }
-        // PojavLauncher on iOS reports as "iOS" or "Darwin" with aarch64
-        return System.getProperty("pojav.launcher") != null
-                || System.getProperty("org.pojavlauncher") != null
-                || (osName.toLowerCase().contains("darwin")
-                    && osArch.toLowerCase().contains("aarch64")
-                    && System.getProperty("metal.platform", "").toLowerCase().contains("ios"));
+        // PojavLauncher / Amethyst on iOS
+        if (System.getProperty("pojav.launcher") != null
+                || System.getProperty("org.pojavlauncher") != null) {
+            return true;
+        }
+        // The JVM on iOS (Azul Zulu via PojavLauncher/Amethyst) often reports
+        // os.name as "Mac OS X" or "Darwin" because it doesn't distinguish the
+        // underlying platform. The most reliable signal is the sandbox path:
+        // on iOS, java.io.tmpdir and user.home are always under
+        // /private/var/mobile/Containers/Data/Application/<UUID>/, which never
+        // exists on macOS. This catches all PojavLauncher/Amethyst variants
+        // regardless of how the JDK reports os.name.
+        String tmpDir = System.getProperty("java.io.tmpdir", "");
+        String userHome = System.getProperty("user.home", "");
+        if (tmpDir.contains("/var/mobile/") || tmpDir.contains("/var/containers/")
+                || userHome.contains("/var/mobile/") || userHome.contains("/var/containers/")) {
+            return true;
+        }
+        // Fallback: Darwin + aarch64 without a "Mac" os.name
+        return osName.toLowerCase().contains("darwin")
+                && osArch.toLowerCase().contains("aarch64")
+                && !osName.toLowerCase().contains("mac");
     }
 
     static {
