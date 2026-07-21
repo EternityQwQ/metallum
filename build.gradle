@@ -179,6 +179,7 @@ tasks.register("buildIOSSpvc") {
 			"-DSPIRV_CROSS_ENABLE_CPP=OFF",
 			"-DSPIRV_CROSS_ENABLE_REFLECT=OFF",
 			"-DSPIRV_CROSS_ENABLE_UTIL=OFF",
+			"-DSPIRV_CROSS_ENABLE_CLI=OFF",
 			"-DBUILD_SHARED_LIBS=ON",
 			"-DCMAKE_BUILD_TYPE=Release",
 			spvcSourceDir.absolutePath], spvcBuildDir)
