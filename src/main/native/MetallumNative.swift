@@ -1443,11 +1443,17 @@ public func metallum_MTLRenderCommandEncoder_clearDraw(
 public func metallum_configure_layer(_ layer: CAMetalLayer, _ width: Double, _ height: Double, _ immediatePresentMode: Int32) {
     layer.pixelFormat = .bgra8Unorm
     layer.drawableSize = CGSize(width: width, height: height)
-    layer.allowsNextDrawableTimeout = false
-    layer.presentsWithTransaction = false
     #if os(macOS)
+    layer.allowsNextDrawableTimeout = false
     layer.displaySyncEnabled = immediatePresentMode == 0
     #elseif os(iOS)
+    // iOS: use allowsNextDrawableTimeout = true to prevent silent frame
+    // drops when all drawables are in-flight. The host UIView owns the
+    // CAMetalLayer (it IS view.layer), and the drawable pool is small
+    // (3 drawables). With MAX_SUBMITS_IN_FLIGHT=3, racing between
+    // command-buffer completions and drawable recycling can exhaust the
+    // pool, causing nextDrawable() to return nil (black frame).
+    layer.allowsNextDrawableTimeout = true
     // The CAMetalLayer IS view.layer (see metallum_ios_get_view_metal_layer):
     // the host UIView owns the layer's frame and updates it on layout /
     // rotation. We must NOT touch layer.frame here — doing so would fight
@@ -1470,6 +1476,7 @@ public func metallum_MTLCommandBuffer_encodePresentTextureToDrawable(
 ) {
     return autoreleasepool {
         guard let drawable: CAMetalDrawable = layer.nextDrawable() else {
+            NSLog("[Metallum] WARNING: nextDrawable() returned nil (drawableSize=\(layer.drawableSize), frame=\(layer.frame), isOpaque=\(layer.isOpaque), device=\(layer.device != nil ? "set" : "nil"))")
             return
         }
 
@@ -1512,6 +1519,9 @@ public func metallum_MTLCommandBuffer_encodePresentTextureToDrawable(
 
         encoder.endEncoding()
         commandBuffer.present(drawable)
+        #if os(iOS)
+        CATransaction.flush()
+        #endif
     }
 }
 
