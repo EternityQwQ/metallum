@@ -1,25 +1,26 @@
-# Metallum
+# MetalUniversal
+> 本项目基于 [kokodio/metallum](https://github.com/kokodio/metallum) 开发，为原项目的 Fork 迭代版本，在保留原有 Metal 渲染后端能力的基础上，新增了对 iOS 平台的完整支持，优化了跨端渲染适配逻辑。
 
-Metallum 是一个基于 Apple Metal API 的 Minecraft 渲染后端模组（Fabric Mod），用于在 macOS 和 iOS 上替代 OpenGL/Vulkan 渲染路径，为 Apple Silicon 和 iOS 设备提供更高效的 GPU 渲染。
+MetalUniversal 是一个基于 Apple Metal API 的 Minecraft 渲染后端模组（Fabric Mod），用于在 macOS 和 iOS 上替代 OpenGL/Vulkan 渲染路径，为 Apple Silicon 和 iOS 设备提供更高效的 GPU 渲染。
 
-本项目仍处于实验性阶段（PoC），性能与稳定性可能因系统和安装mod而异。
+本项目仍处于实验性阶段（PoC），性能与稳定性可能因系统和安装 Mod 而异。
 
 ## 架构
 
 | 层级 | 实现 |
 |------|------|
-| 入口点 | `com.metallum.Metallum`（PreLaunch + ModInitializer） |
+| 入口点 | `com.metaluniversal.MetalUniversal`（PreLaunch + ModInitializer） |
 | GPU 后端 | `MetalBackend` → `MetalDevice` → `MetalCommandEncoder` / `MetalRenderPass` |
 | 着色器编译器 | `MetalCrossShaderCompiler`（GLSL/SPIR-V → MSL，基于 SPIRV-Cross） |
 | 原生桥接 | `MetalNativeBridge`（Java Foreign Memory API ↔ Swift C 导出函数） |
-| 原生实现 | `MetallumNative.swift`（Metal API 调用、CAMetalLayer 管理、MSL 内联着色器） |
+| 原生实现 | `MetalUniversalNative.swift`（Metal API 调用、CAMetalLayer 管理、MSL 内联着色器） |
 | 模组注入 | Mixin 注入 Minecraft `PreferredGraphicsApi` 和 Sodium 渲染后端选择 |
 
 ## 兼容性
 
 - **Sodium**：通过 Mixin 注入 `DrawBackend`、`DrawContext` 和 `SodiumPreferredGraphicsApi`，将 Metal 后端映射为 Sodium 的间接绘制路径
-- **macOS**：Apple Silicon（M1 或更新），通过 Native Bridge 直接加载 `libmetallum.dylib`
-- **iOS**：iOS 14.0 或更高版本，预编译 `libmetallum.dylib`（arm64）和 `libspvc.dylib`（带 MSL 后端）内置于 jar 中
+- **macOS**：Apple Silicon（M1 或更新），通过 Native Bridge 直接加载 `libmetaluniversal.dylib`
+- **iOS**：iOS 14.0 或更高版本，预编译 `libmetaluniversal.dylib`（arm64）和 `libspvc.dylib`（带 MSL 后端）内置于 jar 中
 
 ## 构建
 
@@ -31,6 +32,8 @@ Metallum 是一个基于 Apple Metal API 的 Minecraft 渲染后端模组（Fabr
 - Swift 编译器（`swiftc`）
 
 ### 构建命令
+
+
 
 ```bash
 # 完整构建（macOS 原生 + iOS 原生 + iOS libspvc）
