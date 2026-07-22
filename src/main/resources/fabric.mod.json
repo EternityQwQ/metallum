@@ -6,7 +6,8 @@
   "description": "This is a PoC Metal backend for Minecraft on iOS and macOS.",
   "authors": [
     "kokodio",
-    "EternityQwQ"
+    "EternityQwQ",
+    "yitenchen123"
   ],
   "contact": {
     "homepage": "https://github.com/EternityQwQ/metallum",
