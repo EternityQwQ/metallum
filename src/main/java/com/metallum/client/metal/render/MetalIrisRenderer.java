@@ -46,7 +46,7 @@ public final class MetalIrisRenderer {
     private static final Logger LOGGER = LoggerFactory.getLogger("MetalUniversal");
 
     /** Stage mask: vertex + fragment (used for buffer/texture binding). */
-    private static final int STAGE_ALL = MTLRenderStages.VertexAndFragment.value;
+    private static final int STAGE_ALL = (int) MTLRenderStages.VertexAndFragment.value;
 
     /** Maximum number of texture slots to bind dummy textures to. */
     private static final int MAX_TEXTURE_SLOTS = 8;
