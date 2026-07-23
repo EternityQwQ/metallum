@@ -6,10 +6,17 @@ import it.unimi.dsi.fastutil.objects.Object2ObjectMaps;
 import net.caffeinemc.mods.sodium.client.render.chunk.vertex.format.ChunkMeshFormats;
 import net.irisshaders.iris.compat.dh.DHCompat;
 import net.irisshaders.iris.features.FeatureFlags;
+import net.irisshaders.iris.gl.blending.AlphaTest;
+import net.irisshaders.iris.gl.state.ShaderAttributeInputs;
 import net.irisshaders.iris.gl.texture.TextureType;
 import net.irisshaders.iris.helpers.Tri;
 import net.irisshaders.iris.mixin.LevelRendererAccessor;
+import net.irisshaders.iris.pipeline.WorldRenderingPhase;
+import net.irisshaders.iris.pipeline.WorldRenderingPipeline;
+import net.irisshaders.iris.pipeline.transform.PatchShaderType;
+import net.irisshaders.iris.pipeline.transform.TransformPatcher;
 import net.irisshaders.iris.shaderpack.loading.ProgramArrayId;
+import net.irisshaders.iris.shaderpack.loading.ProgramGroup;
 import net.irisshaders.iris.shaderpack.loading.ProgramId;
 import net.irisshaders.iris.shaderpack.materialmap.WorldRenderingSettings;
 import net.irisshaders.iris.shaderpack.properties.CloudSetting;
@@ -17,8 +24,6 @@ import net.irisshaders.iris.shaderpack.properties.ParticleRenderingSettings;
 import net.irisshaders.iris.shaderpack.programs.ProgramSet;
 import net.irisshaders.iris.shaderpack.programs.ProgramSource;
 import net.irisshaders.iris.shaderpack.texture.TextureStage;
-import net.irisshaders.iris.pipeline.WorldRenderingPhase;
-import net.irisshaders.iris.pipeline.WorldRenderingPipeline;
 import net.irisshaders.iris.uniforms.FrameUpdateNotifier;
 import net.minecraft.client.Camera;
 import net.minecraft.client.gui.components.debug.DebugScreenDisplayer;
@@ -26,6 +31,7 @@ import net.minecraft.client.renderer.state.level.CameraRenderState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 
@@ -78,13 +84,51 @@ public class MetalIrisRenderingPipeline implements WorldRenderingPipeline {
     }
 
     /**
+     * Safe defaults used when calling Iris's {@link TransformPatcher} for the
+     * MSL validation pipeline. Real rendering would need per-program values
+     * (alpha test, attribute inputs) — these defaults are sufficient to get
+     * the AST-level GLSL transformation done (which is what makes SPIR-V
+     * compilation possible at all).
+     */
+    private static final AlphaTest DEFAULT_ALPHA_TEST = AlphaTest.ALWAYS;
+    private static final ShaderAttributeInputs DEFAULT_ATTRIBUTE_INPUTS =
+        new ShaderAttributeInputs(true, true, true, true, true);
+    private static final Object2ObjectMap<Tri<String, TextureType, TextureStage>, String> EMPTY_TEXTURE_MAP =
+        Object2ObjectMaps.emptyMap();
+
+    /**
      * Compiles all shaderpack programs from GLSL to Metal Shading Language
      * via {@link MetalIrisBridge}, validating the GLSL→SPIR-V→MSL pipeline.
      *
-     * <p>This iterates over all gbuffer and composite programs in the
-     * {@link ProgramSet}, extracts their vertex/fragment GLSL source, and
-     * compiles each pair to MSL. Results are logged but not yet used for
-     * rendering — this is a validation step for the compilation pipeline.
+     * <p>Each program's raw GLSL (already processed by Iris's stage-1 text
+     * preprocessor: {@code IncludeProcessor} + {@code JcppProcessor}) is first
+     * passed through the appropriate {@link TransformPatcher} stage-2 AST
+     * transformer before being handed to {@code MetalIrisBridge}. The stage-2
+     * patcher performs the bulk of the GLSL modernisation that SPIR-V
+     * compilation requires:
+     * <ul>
+     *   <li>{@code attribute}/{@code varying} &rarr; {@code in}/{@code out}</li>
+     *   <li>{@code gl_Vertex} &rarr; {@code iris_Position},
+     *       {@code gl_MultiTexCoord0} &rarr; {@code iris_UV0}, etc.</li>
+     *   <li>{@code gl_FragColor} &rarr; {@code iris_FragData[0]}</li>
+     *   <li>UBO injection for {@code iris_ModelViewMat},
+     *       {@code iris_ProjMat}, ...</li>
+     *   <li>legacy function renames, builtin uniform replacement</li>
+     *   <li>{@code #version} bump to at least 330 with {@code core} profile</li>
+     * </ul>
+     *
+     * <p>Which {@code patch*} method is used depends on the program's group:
+     * <ul>
+     *   <li>{@link ProgramGroup#Gbuffers} and {@link ProgramGroup#Shadow}
+     *       &rarr; {@link TransformPatcher#patchVanilla}</li>
+     *   <li>{@link ProgramGroup#Dh} with {@link ProgramId#DhTerrain}
+     *       &rarr; {@link TransformPatcher#patchDHTerrain}</li>
+     *   <li>Other {@link ProgramGroup#Dh} programs
+     *       &rarr; {@link TransformPatcher#patchDHGeneric}</li>
+     *   <li>{@link ProgramGroup#Final} and all {@link ProgramArrayId}s
+     *       &rarr; {@link TransformPatcher#patchComposite} (with the
+     *       appropriate {@link TextureStage})</li>
+     * </ul>
      *
      * <p>Compilation failures are logged as warnings but do not prevent the
      * pipeline from being created — the game continues with vanilla rendering
@@ -108,63 +152,197 @@ public class MetalIrisRenderingPipeline implements WorldRenderingPipeline {
                 continue;
             }
 
-            total++;
-            String name = source.getName();
-            Optional<String> vsOpt = source.getVertexSource();
-            Optional<String> fsOpt = source.getFragmentSource();
-
-            if (vsOpt.isEmpty() || fsOpt.isEmpty()) {
+            PatchPlan plan = planForProgramId(id);
+            if (plan == null) {
                 skipped++;
                 continue;
             }
 
-            try {
-                MetalIrisBridge.ShaderPair pair = MetalIrisBridge.compileIrisProgram(
-                    name, vsOpt.get(), fsOpt.get());
-                if (pair.vertex() != null && pair.fragment() != null) {
-                    success++;
-                    LOGGER.info("[MetalUniversal] Compiled '{}' → MSL (vsh: {} chars, fsh: {} chars)",
-                        name, pair.vertex().source().length(), pair.fragment().source().length());
-                }
-            } catch (Exception e) {
-                failed++;
-                LOGGER.warn("[MetalUniversal] Failed to compile '{}' to MSL: {}", name, e.getMessage());
-            }
+            total++;
+            int result = patchAndCompile(source, plan);
+            if (result == 1) success++;
+            else if (result == 0) skipped++;
+            else failed++;
         }
 
         for (ProgramArrayId arrayId : ProgramArrayId.values()) {
             ProgramSource[] sources = programSet.getComposite(arrayId);
             if (sources == null) continue;
-            for (int i = 0; i < sources.length; i++) {
-                ProgramSource source = sources[i];
+            for (ProgramSource source : sources) {
                 if (source == null || !source.isValid()) {
                     continue;
                 }
-                total++;
-                String name = source.getName();
-                Optional<String> vsOpt = source.getVertexSource();
-                Optional<String> fsOpt = source.getFragmentSource();
-                if (vsOpt.isEmpty() || fsOpt.isEmpty()) {
-                    skipped++;
+                PatchPlan plan = planForProgramArrayId(arrayId);
+                if (plan == null) {
                     continue;
                 }
-                try {
-                    MetalIrisBridge.ShaderPair pair = MetalIrisBridge.compileIrisProgram(
-                        name, vsOpt.get(), fsOpt.get());
-                    if (pair.vertex() != null && pair.fragment() != null) {
-                        success++;
-                        LOGGER.info("[MetalUniversal] Compiled '{}' → MSL (vsh: {} chars, fsh: {} chars)",
-                            name, pair.vertex().source().length(), pair.fragment().source().length());
-                    }
-                } catch (Exception e) {
-                    failed++;
-                    LOGGER.warn("[MetalUniversal] Failed to compile '{}' to MSL: {}", name, e.getMessage());
-                }
+                total++;
+                int result = patchAndCompile(source, plan);
+                if (result == 1) success++;
+                else if (result == 0) skipped++;
+                else failed++;
             }
         }
 
         LOGGER.info("[MetalUniversal] MetalIrisRenderingPipeline ready. MSL compilation: {} compiled, {} failed, {} skipped (no source), {} total.",
             success, failed, skipped, total);
+    }
+
+    /**
+     * Determines which {@link TransformPatcher} method to call for a given
+     * {@link ProgramId}, based on its {@link ProgramGroup}.
+     *
+     * @return the {@link PatchPlan} describing how to patch this program,
+     *         or {@code null} if the program group is not handled
+     *         (e.g. {@code Setup}, {@code Begin}, ... — those are
+     *         {@link ProgramArrayId}s, not {@link ProgramId}s).
+     */
+    private static PatchPlan planForProgramId(ProgramId id) {
+        ProgramGroup group = id.getGroup();
+        switch (group) {
+            case Shadow, Gbuffers -> {
+                return new PatchPlan(PatchMethod.VANILLA, null);
+            }
+            case Dh -> {
+                if (id == ProgramId.DhTerrain) {
+                    return new PatchPlan(PatchMethod.DH_TERRAIN, null);
+                }
+                return new PatchPlan(PatchMethod.DH_GENERIC, null);
+            }
+            case Final -> {
+                return new PatchPlan(PatchMethod.COMPOSITE, TextureStage.COMPOSITE_AND_FINAL);
+            }
+            default -> {
+                return null;
+            }
+        }
+    }
+
+    /**
+     * Determines which {@link TransformPatcher} method to call for a given
+     * {@link ProgramArrayId}, mapping the array's group to the corresponding
+     * {@link TextureStage} for {@link TransformPatcher#patchComposite}.
+     */
+    private static PatchPlan planForProgramArrayId(ProgramArrayId id) {
+        // All ProgramArrayId programs (Setup/Begin/ShadowComposite/Prepare/
+        // Deferred/Composite) are patched with patchComposite, but each one
+        // passes a different TextureStage so that custom-texture lookups in
+        // TextureTransformer resolve against the right stage's texture map.
+        TextureStage stage = switch (id.getGroup()) {
+            case Setup -> TextureStage.SETUP;
+            case Begin -> TextureStage.BEGIN;
+            case ShadowComposite -> TextureStage.SHADOWCOMP;
+            case Prepare -> TextureStage.PREPARE;
+            case Deferred -> TextureStage.DEFERRED;
+            case Composite -> TextureStage.COMPOSITE_AND_FINAL;
+            default -> null;
+        };
+        if (stage == null) {
+            return null;
+        }
+        return new PatchPlan(PatchMethod.COMPOSITE, stage);
+    }
+
+    /**
+     * Runs Iris's {@link TransformPatcher} on the program's GLSL sources,
+     * then compiles the patched GLSL to MSL via {@link MetalIrisBridge}.
+     *
+     * <p>Iris's patchers return a {@link Map} keyed by {@link PatchShaderType}
+     * containing the transformed source for each stage (the patcher may
+     * inject/remove stages or split one into several). Only VERTEX and
+     * FRAGMENT are consumed here — geometry/tessellation are unsupported by
+     * {@link MetalIrisBridge} in this beta.
+     *
+     * @return {@code 1} on success, {@code 0} if the program was skipped
+     *         (no patched vertex or fragment source), {@code -1} on failure
+     */
+    private int patchAndCompile(ProgramSource source, PatchPlan plan) {
+        String name = source.getName();
+        String vertex = source.getVertexSource().orElse(null);
+        String geometry = source.getGeometrySource().orElse(null);
+        String tessControl = source.getTessControlSource().orElse(null);
+        String tessEval = source.getTessEvalSource().orElse(null);
+        String fragment = source.getFragmentSource().orElse(null);
+
+        if (vertex == null || fragment == null) {
+            return 0;
+        }
+
+        Map<PatchShaderType, String> patched;
+        try {
+            patched = switch (plan.method) {
+                case VANILLA -> TransformPatcher.patchVanilla(
+                    name, vertex, geometry, tessControl, tessEval, fragment,
+                    DEFAULT_ALPHA_TEST,
+                    /* isLines */ false,
+                    /* isClouds */ false,
+                    /* hasChunkOffset */ true,
+                    DEFAULT_ATTRIBUTE_INPUTS,
+                    EMPTY_TEXTURE_MAP);
+                case COMPOSITE -> TransformPatcher.patchComposite(
+                    name, vertex, geometry, fragment,
+                    plan.stage, EMPTY_TEXTURE_MAP);
+                case DH_TERRAIN -> TransformPatcher.patchDHTerrain(
+                    name, vertex, tessControl, tessEval, geometry, fragment,
+                    EMPTY_TEXTURE_MAP);
+                case DH_GENERIC -> TransformPatcher.patchDHGeneric(
+                    name, vertex, tessControl, tessEval, geometry, fragment,
+                    EMPTY_TEXTURE_MAP);
+            };
+        } catch (Exception e) {
+            logFailure(name, "TransformPatcher.patch* failed: " + e.getMessage(), e);
+            return -1;
+        }
+
+        if (patched == null) {
+            return 0;
+        }
+
+        String patchedVertex = patched.get(PatchShaderType.VERTEX);
+        String patchedFragment = patched.get(PatchShaderType.FRAGMENT);
+        if (patchedVertex == null || patchedFragment == null) {
+            LOGGER.warn("[MetalUniversal] '{}' patcher produced null vertex or fragment (vertex={}, fragment={})",
+                name, patchedVertex != null, patchedFragment != null);
+            return 0;
+        }
+
+        try {
+            MetalIrisBridge.ShaderPair pair = MetalIrisBridge.compileIrisProgram(
+                name, patchedVertex, patchedFragment);
+            if (pair.vertex() != null && pair.fragment() != null) {
+                LOGGER.info("[MetalUniversal] Compiled '{}' → MSL (vsh: {} chars, fsh: {} chars)",
+                    name, pair.vertex().source().length(), pair.fragment().source().length());
+                return 1;
+            }
+            return -1;
+        } catch (Exception e) {
+            logFailure(name, e.getMessage(), e);
+            return -1;
+        }
+    }
+
+    private static void logFailure(String name, String message, Throwable e) {
+        Throwable root = e;
+        while (root.getCause() != null && root.getCause() != root) {
+            root = root.getCause();
+        }
+        LOGGER.warn("[MetalUniversal] Failed to compile '{}' to MSL: {} | root: {}",
+            name, message, root.toString());
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("[MetalUniversal] Compilation failure stack for '{}'", name, root);
+        }
+    }
+
+    /** Which {@link TransformPatcher} method to invoke. */
+    private enum PatchMethod {
+        VANILLA,
+        COMPOSITE,
+        DH_TERRAIN,
+        DH_GENERIC
+    }
+
+    /** Carrier for the patching strategy selected for a single program. */
+    private record PatchPlan(PatchMethod method, TextureStage stage) {
     }
 
     @Override
