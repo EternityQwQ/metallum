@@ -3,7 +3,10 @@ package com.metallum.client.metal.iris;
 import com.metallum.Metallum;
 import com.metallum.client.metal.render.MetalCrossShaderCompiler;
 import com.metallum.client.metal.render.MetalCrossShaderCompiler.MslShader;
+import com.metallum.mixin.accessor.MetallumGpuDeviceAccessor;
+import com.mojang.blaze3d.opengl.GlDevice;
 import com.mojang.blaze3d.shaders.ShaderType;
+import com.mojang.blaze3d.systems.RenderSystem;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.util.LinkedHashMap;
@@ -93,6 +96,31 @@ public final class MetalIrisBridge {
      */
     public static boolean isIrisPresent() {
         return irisPresent;
+    }
+
+    /**
+     * Determines whether the active GPU backend is a non-OpenGL backend
+     * (Metal or Vulkan). On such backends there is no live OpenGL context, so
+     * Iris's OpenGL-dependent initialization and rendering paths must be
+     * diverted by MetalUniversal's Iris mixins.
+     *
+     * <p>This inspects the concrete backend held by the current
+     * {@link com.mojang.blaze3d.systems.GpuDevice}. If the backend is a
+     * {@link GlDevice}, OpenGL is available and Iris can run natively; otherwise
+     * the Metal/Vulkan redirection path is required.
+     *
+     * @return {@code true} if the active backend is NOT OpenGL
+     *         (i.e. Iris must be diverted)
+     */
+    public static boolean isNonGlBackend() {
+        try {
+            Object backend = ((MetallumGpuDeviceAccessor) RenderSystem.getDevice()).metallum$getBackend();
+            return !(backend instanceof GlDevice);
+        } catch (Throwable t) {
+            // Device not ready yet, or accessor not applied — assume non-GL to
+            // be safe so Iris's GL paths are diverted rather than crashing.
+            return true;
+        }
     }
 
     /**

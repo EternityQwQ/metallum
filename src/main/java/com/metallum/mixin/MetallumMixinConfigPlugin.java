@@ -40,6 +40,17 @@ public final class MetallumMixinConfigPlugin implements IMixinConfigPlugin {
         if (mixinClassName.contains(".mixin.sodium.")) {
             return FabricLoader.getInstance().isModLoaded("sodium");
         }
+        if (mixinClassName.contains(".mixin.iris.")) {
+            // Iris-targeting mixins are only needed when Iris is installed.
+            // They self-guard at runtime via MetalIrisBridge.isNonGlBackend(),
+            // so they are safe to apply on GL backends too.
+            return FabricLoader.getInstance().isModLoaded("iris");
+        }
+        if (mixinClassName.contains(".mixin.accessor.")) {
+            // Accessor mixins expose Mojang internals needed for backend
+            // detection. They are harmless on any backend.
+            return true;
+        }
         return PREFERRED_GRAPHICS_API_MIXIN.equals(mixinClassName) || this.isDefaultGraphicsApi;
     }
 

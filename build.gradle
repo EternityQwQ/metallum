@@ -21,15 +21,15 @@ dependencies {
 	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
 	implementation "maven.modrinth:sodium:${project.sodium_version}"
 
-	// Iris is intentionally NOT a compile-time dependency here. MetalUniversal's
-	// MetalIrisBridge is fully decoupled from Iris at compile time: it does not
-	// reference any net.irisshaders.iris.* classes, so Iris does not need to be
-	// present on the build classpath. Iris is detected at runtime via
-	// FabricLoader, and shader stages are identified by string name (e.g.
-	// "VERTEX", "FRAGMENT") to avoid a hard type dependency on Iris's
-	// ShaderType enum. Fabric Loom 1.16-SNAPSHOT in this project does not
-	// support the modCompileOnly() configuration method, so adding Iris that
-	// way would break the build.
+	// Iris is needed on the compile classpath so that Metallum's Iris-targeting
+	// mixins (in com.metallum.mixin.iris) can reference Iris's classes. It is
+	// declared with the standard `compileOnly` configuration (NOT Loom's
+	// modCompileOnly, which this Loom version does not support). Loom still
+	// remaps it to named mappings for compilation. Iris is NOT on the runtime
+	// classpath — it is provided by the user installing Iris alongside
+	// MetalUniversal. The MetalIrisBridge itself stays runtime-decoupled and
+	// detects Iris via FabricLoader.
+	compileOnly "maven.modrinth:iris:${project.iris_version}"
 }
 
 processResources {
