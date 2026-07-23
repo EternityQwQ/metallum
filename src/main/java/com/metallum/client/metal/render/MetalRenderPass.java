@@ -59,8 +59,9 @@ final class MetalRenderPass implements RenderPassBackend {
      * Iris gbuffers pipeline exists for the active phase. While non-null, the
      * native pipeline state, depth stencil, cull/fill mode, topology and vertex
      * buffer layout all come from the Iris pipeline, and the vanilla named-
-     * resource descriptor loop is skipped. Uniform/sampler binding for the Iris
-     * MSL is added in M5d-2/M5d-3.
+     * resource descriptor loop is skipped. Reflected Iris UBO slots are bound
+     * by {@link #pushIrisUniformBindings} (M5d-2) and texture/sampler slots by
+     * {@link #pushIrisTextureBindings} (M5d-3).
      */
     @Nullable
     private MetalIrisPipeline irisPipeline;
@@ -124,10 +125,12 @@ final class MetalRenderPass implements RenderPassBackend {
         // M5d-1: when the Iris pipeline swap is enabled and a gbuffers phase is
         // active, resolve the cached Iris gbuffers pipeline. If found,
         // bindDrawState substitutes its native pipeline state (and vertex
-        // buffer layout) for vanilla's. Uniform/sampler binding for the Iris
-        // MSL is added in M5d-2/M5d-3; until then the swap is gated off by
-        // MetalIrisRenderer.pipelineSwapEnabled (default false), so vanilla
-        // rendering is unaffected.
+        // buffer layout) for vanilla's, and reflected UBO/texture/sampler
+        // bindings are pushed (M5d-2/M5d-3). The swap is enabled by
+        // MetalIrisRenderer.pipelineSwapEnabled (flipped to true in
+        // MetalIrisRenderingPipeline.beginLevelRendering once binding was
+        // complete); when no gbuffers phase is active, getActiveIrisPipeline
+        // returns null and vanilla rendering is unaffected.
         MetalIrisPipeline resolved = MetalIrisRenderer.isPipelineSwapEnabled()
                 ? MetalIrisRenderer.getActiveIrisPipeline()
                 : null;
@@ -573,11 +576,13 @@ final class MetalRenderPass implements RenderPassBackend {
                 }
             }
         } else if (irisPipeline != null) {
-            // M5d-2: bind reflected Iris UBO slots (textures/samplers are M5d-3).
-            // The swap stays gated off by MetalIrisRenderer.pipelineSwapEnabled
-            // (default false) until M5d-3, so this branch is infrastructure that
-            // does not execute in M5d-2.
+            // M5d-2/M5d-3: bind reflected Iris UBO and texture/sampler slots.
+            // The swap is enabled by MetalIrisRenderer.pipelineSwapEnabled
+            // (flipped to true in MetalIrisRenderingPipeline.beginLevelRendering
+            // once both UBO and texture/sampler binding were in place), so the
+            // Iris MSL never runs with unbound arguments.
             pushIrisUniformBindings(enc, irisPipeline);
+            pushIrisTextureBindings(enc, irisPipeline);
         }
 
         dirtyDescriptorMask = 0L;
@@ -707,12 +712,6 @@ final class MetalRenderPass implements RenderPassBackend {
      * {@link #setUniform}; otherwise binds the device's zeroed scratch uniform
      * buffer so the MSL's {@code [[buffer(N)]]} argument is never left unbound.
      *
-     * <p>Texture and sampler bindings are reflected but intentionally skipped
-     * here — they are bound in M5d-3. The pipeline swap remains gated off
-     * ({@code MetalIrisRenderer.pipelineSwapEnabled == false}) until M5d-3, so
-     * this path does not execute in M5d-2; it is infrastructure for the M5d-3
-     * enable.
-     *
      * <p>Dirtiness tracking is not yet implemented — all reflected UBOs are
      * re-bound on every {@link #bindDrawState} call while the Iris override is
      * active. This is correct (idempotent) and can be optimized later.
@@ -737,6 +736,71 @@ final class MetalRenderPass implements RenderPassBackend {
                         binding.bindingIndex(),
                         binding.stageMask());
             }
+        }
+    }
+
+    /**
+     * Binds reflected Iris MSL texture and sampler slots (M5d-3). SPIRV-Cross
+     * emits a GLSL combined image sampler ({@code uniform sampler2D foo;}) as a
+     * texture argument {@code [[texture(N)]]} plus a sampler argument
+     * {@code [[sampler(N)]]} sharing the same index {@code N}. Metal binds the
+     * pair together via {@code setTextureAndSampler}, so this method pairs each
+     * reflected {@link MetalIrisPipeline.IrisResourceKind#TEXTURE} binding with
+     * the {@link MetalIrisPipeline.IrisResourceKind#SAMPLER} at the same index.
+     *
+     * <p>For each texture binding, if a {@link #samplers} entry was provided
+     * (via {@link #bindTexture}) whose name matches the reflected texture
+     * binding name, its texture view and sampler are bound; otherwise the
+     * device's cached dummy texture and default sampler are bound so the MSL's
+     * {@code [[texture(N)]]} / {@code [[sampler(N)]]} arguments are never left
+     * unbound. Name matching is best-effort: Iris MSL binding names (cross-
+     * compiled from Iris GLSL) generally differ from vanilla's named samplers,
+     * so most slots fall back to the dummy until a later milestone maps Iris
+     * samplers explicitly.
+     *
+     * <p>Like {@link #pushIrisUniformBindings}, all reflected texture/sampler
+     * pairs are re-bound on every {@link #bindDrawState} call (idempotent).
+     */
+    private void pushIrisTextureBindings(final MTLRenderCommandEncoder enc, final MetalIrisPipeline iris) {
+        final MemorySegment dummyTexture = MetalIrisRenderer.getDummyTexture(device);
+        final MemorySegment dummySampler = MetalIrisRenderer.getDummySampler(device);
+
+        // Pair each texture binding with the sampler at the same index. Metal's
+        // vertex/fragment tables are independent, but SPIRV-Cross emits paired
+        // texture+sampler at the same index within a stage, so keying by index
+        // (within the merged binding list) is sufficient.
+        final HashMap<Integer, MetalIrisPipeline.IrisResourceBinding> samplersByIndex = new HashMap<>();
+        for (MetalIrisPipeline.IrisResourceBinding binding : iris.bindings()) {
+            if (binding.kind() == MetalIrisPipeline.IrisResourceKind.SAMPLER) {
+                samplersByIndex.put(binding.bindingIndex(), binding);
+            }
+        }
+
+        for (MetalIrisPipeline.IrisResourceBinding binding : iris.bindings()) {
+            if (binding.kind() != MetalIrisPipeline.IrisResourceKind.TEXTURE) {
+                continue;
+            }
+            final int index = binding.bindingIndex();
+            int stageMask = binding.stageMask();
+            final MetalIrisPipeline.IrisResourceBinding samplerBinding = samplersByIndex.get(index);
+            if (samplerBinding != null) {
+                stageMask |= samplerBinding.stageMask();
+            }
+
+            MemorySegment textureHandle = dummyTexture;
+            MemorySegment samplerHandle = dummySampler;
+            final TextureViewAndSampler provided = samplers.get(binding.name());
+            if (provided != null
+                    && !provided.textureView().isClosed()
+                    && !((MetalGpuSampler) provided.sampler()).isClosed()) {
+                textureHandle = ((MetalGpuTextureView) provided.textureView()).nativeHandle();
+                samplerHandle = ((MetalGpuSampler) provided.sampler()).nativeHandle();
+            }
+
+            if (MetalNativeBridge.isNullHandle(textureHandle) || MetalNativeBridge.isNullHandle(samplerHandle)) {
+                continue;
+            }
+            enc.setTextureAndSampler(textureHandle, samplerHandle, index, stageMask);
         }
     }
 

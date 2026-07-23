@@ -1,12 +1,15 @@
 package com.metallum.client.metal.render;
 
 import com.metallum.client.metal.render.bridge.MetalNativeBridge;
+import com.metallum.client.metal.render.mtl.MTLPixelFormat;
 import com.metallum.client.metal.render.mtl.MTLPrimitiveType;
 import com.metallum.client.metal.render.mtl.MTLRenderCommandEncoder;
 import com.metallum.client.metal.render.mtl.MTLRenderStages;
+import com.metallum.client.metal.render.mtl.MTLSamplerAddressMode;
+import com.metallum.client.metal.render.mtl.MTLSamplerMinMagFilter;
+import com.metallum.client.metal.render.mtl.MTLSamplerMipFilter;
 import com.metallum.client.metal.render.mtl.MTLStorageMode;
 import com.metallum.client.metal.render.mtl.MTLTextureUsage;
-import com.metallum.client.metal.render.mtl.MTLPixelFormat;
 import com.metallum.mixin.accessor.MetallumGpuDeviceAccessor;
 import com.mojang.blaze3d.GpuFormat;
 import com.mojang.blaze3d.systems.GpuDevice;
@@ -108,6 +111,14 @@ public final class MetalIrisRenderer {
     private static MemorySegment dummyTextureHandle = MemorySegment.NULL;
 
     /**
+     * Cached default {@code MTLSamplerState} handle (M5d-3). Bound alongside
+     * the dummy texture to reflected Iris sampler slots that have no provided
+     * texture/sampler, so Metal never reads unbound sampler state. Created
+     * lazily, reused across frames (like {@link #dummyTextureHandle}).
+     */
+    private static MemorySegment dummySamplerHandle = MemorySegment.NULL;
+
+    /**
      * The active Iris gbuffers program name for the current rendering phase
      * (M5c). Set by {@link com.metallum.client.metal.iris.MetalIrisRenderingPipeline#setPhase}
      * / {@code setOverridePhase} (which resolve the phase → program name), read
@@ -144,13 +155,13 @@ public final class MetalIrisRenderer {
      * Whether {@code MetalRenderPass} should substitute the Iris gbuffers
      * pipeline for vanilla's when a gbuffers phase is active (M5d-1).
      *
-     * <p>Defaults to {@code false}: the native pipeline state, vertex buffers,
-     * uniforms and samplers all continue to come from the vanilla
-     * {@code MetalCompiledRenderPipeline}, so vanilla rendering is completely
-     * unaffected. This flag is the staging gate for the multi-commit M5d
-     * pipeline swap — it is flipped to {@code true} only once the Iris uniform
-     * (M5d-2) and sampler (M5d-3) binding is in place, so the Iris MSL never
-     * runs with unbound UBOs/samplers.
+     * <p>Flipped to {@code true} in
+     * {@code MetalIrisRenderingPipeline.beginLevelRendering} (M5d-3): by that
+     * point the Iris UBO binding (M5d-2) and texture/sampler binding (M5d-3)
+     * are both in place, so the Iris MSL never runs with unbound arguments.
+     * Reset to {@code false} by {@link #clearCache()} (shaderpack reload). When
+     * no gbuffers phase is active, {@link #getActiveIrisPipeline()} returns
+     * {@code null} and vanilla rendering is unaffected even with this flag on.
      */
     private static volatile boolean pipelineSwapEnabled = false;
 
@@ -283,9 +294,11 @@ public final class MetalIrisRenderer {
 
     /**
      * Gets or creates the cached 1x1 dummy texture (for binding to unused
-     * sampler slots so Metal doesn't read garbage).
+     * sampler slots so Metal doesn't read garbage). Package-private so
+     * {@code MetalRenderPass.pushIrisTextureBindings} (M5d-3) can reuse the
+     * same handle for reflected Iris texture slots that have no provided value.
      */
-    private static MemorySegment getDummyTexture(final MetalDevice device) {
+    static MemorySegment getDummyTexture(final MetalDevice device) {
         if (MetalNativeBridge.isNullHandle(dummyTextureHandle)) {
             dummyTextureHandle = MetalNativeBridge.metallum_create_texture_2d(
                     device.metalDeviceHandle(),
@@ -301,6 +314,31 @@ public final class MetalIrisRenderer {
             }
         }
         return dummyTextureHandle;
+    }
+
+    /**
+     * Gets or creates the cached default sampler state (M5d-3). Bound alongside
+     * the dummy texture to reflected Iris sampler slots that have no provided
+     * texture/sampler, so Metal never reads unbound sampler state. Uses safe
+     * defaults (clamp-to-edge, linear filter, no mipmapping).
+     */
+    static MemorySegment getDummySampler(final MetalDevice device) {
+        if (MetalNativeBridge.isNullHandle(dummySamplerHandle)) {
+            dummySamplerHandle = MetalNativeBridge.metallum_create_sampler(
+                    device.metalDeviceHandle(),
+                    MTLSamplerAddressMode.ClampToEdge,
+                    MTLSamplerAddressMode.ClampToEdge,
+                    MTLSamplerMinMagFilter.Linear,
+                    MTLSamplerMinMagFilter.Linear,
+                    MTLSamplerMipFilter.NotMipmapped,
+                    1,
+                    1000.0
+            );
+            if (MetalNativeBridge.isNullHandle(dummySamplerHandle)) {
+                LOGGER.warn("[MetalUniversal] Failed to create dummy sampler");
+            }
+        }
+        return dummySamplerHandle;
     }
 
     /**

@@ -87,9 +87,9 @@ import java.util.regex.Pattern;
  * {@code [[buffer(N)]]} in the MSL is exclusively UBOs and push-constants —
  * vertex buffers (configured via {@link MTLVertexDescriptor}) never appear as
  * {@code [[buffer(N)]]}, which makes the regex parse safe.
- * {@code MetalRenderPass.bindDrawState} uses the reflected UBO bindings to bind
- * Iris uniform buffers when the pipeline swap is active (M5d-2); texture/sampler
- * bindings are reflected now but bound in M5d-3.
+ * {@code MetalRenderPass.bindDrawState} consumes the reflected UBO bindings to
+ * bind Iris uniform buffers (M5d-2) and the reflected texture/sampler bindings
+ * to bind Iris samplers (M5d-3) when the pipeline swap is active.
  */
 final class MetalIrisPipeline implements AutoCloseable {
     private static final Logger LOGGER = LoggerFactory.getLogger("MetalUniversal");

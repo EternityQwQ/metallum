@@ -408,6 +408,12 @@ public class MetalIrisRenderingPipeline implements WorldRenderingPipeline {
         } catch (Throwable t) {
             LOGGER.warn("[MetalUniversal] beginLevelRendering: could not ensure gbuffer/shadow targets", t);
         }
+        // M5d-3: enable the gbuffers pipeline swap now that Iris UBO (M5d-2)
+        // and texture/sampler (M5d-3) binding are in place. The swap only
+        // takes effect during gbuffers phases (getActiveIrisPipeline returns
+        // null otherwise), and is reset to false by clearCache (shaderpack
+        // reload). Idempotent across frames.
+        MetalIrisRenderer.setPipelineSwapEnabled(true);
     }
 
     @Override
