@@ -1,5 +1,6 @@
 package com.metallum.client.metal.iris;
 
+import com.metallum.client.metal.render.MetalIrisRenderer;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMaps;
@@ -428,6 +429,25 @@ public class MetalIrisRenderingPipeline implements WorldRenderingPipeline {
 
     @Override
     public void finalizeLevelRendering() {
+        // M4c: Render the "final" Iris pass to an offscreen render target.
+        // The final pass reads colortex0+ and writes the final screen image.
+        // Currently renders to an offscreen RGBA8 texture (not yet presented
+        // to screen — that integration is future work).
+        MetalIrisBridge.ShaderPair finalShaders = compiledShaders.get("final");
+        if (finalShaders == null) {
+            return;
+        }
+        try {
+            int width = net.minecraft.client.Minecraft.getInstance().getWindow().getWidth();
+            int height = net.minecraft.client.Minecraft.getInstance().getWindow().getHeight();
+            MetalIrisRenderer.renderFinalPass(
+                    finalShaders.vertex().source(),
+                    finalShaders.fragment().source(),
+                    width, height
+            );
+        } catch (Throwable t) {
+            LOGGER.error("[MetalUniversal] Failed to render final pass", t);
+        }
     }
 
     @Override
@@ -436,6 +456,7 @@ public class MetalIrisRenderingPipeline implements WorldRenderingPipeline {
 
     @Override
     public void destroy() {
+        MetalIrisRenderer.clearCache();
         compiledShaders.clear();
         LOGGER.info("[MetalUniversal] MetalIrisRenderingPipeline destroyed (released {} compiled MSL shader pairs).",
             compiledShaders.size());
