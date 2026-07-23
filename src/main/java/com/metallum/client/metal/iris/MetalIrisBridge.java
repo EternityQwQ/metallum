@@ -9,7 +9,9 @@ import com.mojang.blaze3d.shaders.ShaderType;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.fabricmc.loader.api.FabricLoader;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -126,9 +128,11 @@ public final class MetalIrisBridge {
     /**
      * Compiles a shaderpack GLSL source string to Metal Shading Language.
      *
-     * <p>The GLSL is first preprocessed to ensure SPIR-V compatibility (explicit
-     * {@code layout(location=N)} on {@code in}/{@code out} variables), then
-     * compiled via MetalUniversal's existing GLSL&rarr;SPIR-V&rarr;MSL pipeline.
+     * <p>The GLSL is first preprocessed via {@link #ensureSpirvCompatible}
+     * to make it Vulkan/SPIR-V-conformant (bump {@code #version} to 450,
+     * wrap loose uniforms in a UBO, add {@code layout(location=N)} to
+     * {@code in}/{@code out} variables), then compiled via MetalUniversal's
+     * existing GLSL&rarr;SPIR-V&rarr;MSL pipeline.
      *
      * <p>Shader stage names match Iris's {@code ShaderType} enum names (case-
      * insensitive): {@code VERTEX}, {@code FRAGMENT}, {@code GEOMETRY},
@@ -216,42 +220,171 @@ public final class MetalIrisBridge {
         };
     }
 
-    // ---- GLSL SPIR-V compatibility preprocessing ----
+    // ---- GLSL Vulkan/SPIR-V compatibility preprocessing ----
+    //
+    // Iris's TransformPatcher outputs desktop OpenGL GLSL (e.g. #version 330
+    // core with loose `uniform vec3 foo;` declarations and in/out variables
+    // without layout(location)). Mojang's GlslCompiler (in
+    // com.mojang.blaze3d.vulkan.glsl) targets Vulkan/SPIR-V, which has two
+    // strict requirements that desktop GLSL violates:
+    //
+    //   1. All non-opaque uniforms MUST be inside a uniform block (UBO).
+    //      → error: "non-opaque uniforms outside a block"
+    //   2. All in/out interface variables MUST have layout(location=N).
+    //      → error: "location qualifier on output: not supported for this
+    //        version or the enabled extensions" (needs #version 450 in
+    //        Vulkan profile, not just 330)
+    //
+    // Iris's own LayoutTransformer would fix #2 when IrisLimits.VK_CONFORMANCE
+    // is true, but that's a compile-time constant (false). Nothing in Iris
+    // fixes #1 — Iris relies on desktop GL which allows loose uniforms.
+    //
+    // The following three-step pass makes the patched GLSL Vulkan-conformant:
+
+    /** Matches {@code #version <number> [profile]} for version bumping. */
+    private static final Pattern VERSION_LINE = Pattern.compile(
+            "#version\\s+\\d+(?:\\s+\\w+)?", Pattern.MULTILINE
+    );
 
     /**
-     * Pattern matching a top-level {@code in}/{@code out} declaration that
-     * lacks a {@code layout(...)} qualifier. Captures group 1 = storage
-     * qualifier (in/out), group 2 = type, group 3 = variable name(s).
+     * Matches a loose (non-block, non-opaque) uniform declaration at global
+     * scope. Captures:
+     * <ul>
+     *   <li>group 1 = type (vec3, mat4, float, user struct, ...)</li>
+     *   <li>group 2 = variable name</li>
+     *   <li>group 3 = optional array specifier (e.g. {@code [4]})</li>
+     * </ul>
      *
-     * <p>This is a simplified regex-based equivalent of Iris's
-     * {@code LayoutTransformer}, which uses a full ANTLR AST to do the same
-     * job. The regex approach handles the common cases (single declarations,
-     * simple types) and is sufficient for most shader packs.
+     * <p>Excludes opaque types (sampler*, image*, atomicCounter, subpass*)
+     * via negative lookahead — those stay as-is (Vulkan allows them outside
+     * blocks). Also excludes uniform blocks ({@code uniform Name { ... };})
+     * because they have {@code {} after the name, not {@code ;} or
+     * {@code [...]}.
      */
-    private static final Pattern UNLOCATED_IN_OUT = Pattern.compile(
-            "^\\s*(?!layout\\s*\\()(in|out)\\s+(\\w+)\\s+([^;]+);",
+    private static final Pattern LOOSE_UNIFORM = Pattern.compile(
+            "^\\s*uniform\\s+(?!sampler|image|subpass|atomicCounter|isampler|usampler|iimage|uimage)" +
+            "(\\w+)\\s+(\\w+)\\s*(\\[[^\\]]*\\])?\\s*(?:=[^;]+)?\\s*;",
             Pattern.MULTILINE
     );
 
     /**
-     * Ensures the GLSL source is SPIR-V-compatible by adding explicit
-     * {@code layout(location=N)} qualifiers to {@code in}/{@code out} variables
-     * that lack them. SPIR-V (and thus the GlslCompiler) requires explicit
-     * locations on interface variables; desktop GLSL does not.
+     * Matches a top-level {@code in}/{@code out} declaration that lacks a
+     * {@code layout(...)} qualifier, including optional interpolation
+     * qualifiers (flat, smooth, noperspective, centroid, invariant, precise).
+     * Captures:
+     * <ul>
+     *   <li>group 1 = preceding qualifiers (e.g. "flat " or "")</li>
+     *   <li>group 2 = storage qualifier (in/out)</li>
+     *   <li>group 3 = type</li>
+     *   <li>group 4 = variable name(s)</li>
+     * </ul>
+     */
+    private static final Pattern UNLOCATED_IN_OUT = Pattern.compile(
+            "^\\s*((?:(?:flat|smooth|noperspective|centroid|invariant|precise)\\s+)*)(in|out)\\s+(\\w+)\\s+([^;]+);",
+            Pattern.MULTILINE
+    );
+
+    /**
+     * Transforms Iris's patched desktop-GLSL into Vulkan-conformant GLSL so
+     * that Mojang's {@code GlslCompiler} can compile it to SPIR-V.
      *
-     * <p>This replicates what Iris's {@code LayoutTransformer.transformGrouped}
-     * does when {@code IrisLimits.VK_CONFORMANCE} is {@code true}. Since that
-     * flag is a compile-time constant ({@code false}) baked into Iris's jar,
-     * we cannot enable it at runtime; instead we perform the transformation
-     * here before handing the GLSL to the SPIR-V compiler.
+     * <p>Three steps:
+     * <ol>
+     *   <li><b>Bump {@code #version} to 450.</b> The patcher bumps to 330,
+     *       but glslang's Vulkan profile requires 450 for
+     *       {@code layout(location)} on in/out without extensions.</li>
+     *   <li><b>Wrap loose non-opaque uniforms in a UBO.</b> Collects all
+     *       {@code uniform <type> <name>;} declarations (excluding
+     *       samplers/images/already-in-blocks), removes them, and injects
+     *       a single {@code layout(std140) uniform iris_LooseUniforms { ... };}
+     *       block at the position of the first removed declaration.</li>
+     *   <li><b>Add {@code layout(location=N)} to in/out.</b> Assigns
+     *       sequential locations to in and out variables separately.</li>
+     * </ol>
      *
-     * @param glslSource the GLSL source (already patched by Iris's TransformPatcher)
-     * @return SPIR-V-compatible GLSL with explicit layout locations
+     * @param glslSource GLSL already patched by Iris's TransformPatcher
+     * @return Vulkan-conformant GLSL ready for SPIR-V compilation
      */
     static String ensureSpirvCompatible(final String glslSource) {
         if (glslSource == null || glslSource.isBlank()) {
             return glslSource;
         }
+        String result = bumpVersionTo450(glslSource);
+        result = wrapLooseUniformsInUbo(result);
+        result = addLayoutLocationsToInOut(result);
+        return result;
+    }
+
+    /**
+     * Replaces the first {@code #version XXX [profile]} with
+     * {@code #version 450}. If no version line exists, prepends one.
+     */
+    private static String bumpVersionTo450(final String glslSource) {
+        Matcher m = VERSION_LINE.matcher(glslSource);
+        if (m.find()) {
+            return m.replaceFirst("#version 450");
+        }
+        return "#version 450\n" + glslSource;
+    }
+
+    /**
+     * Collects all loose non-opaque uniform declarations, removes them from
+     * the source, and injects a single UBO block at the position of the first
+     * removed declaration (so any preceding struct/type definitions remain
+     * visible).
+     *
+     * <p>Initializers ({@code = ...}) are stripped — UBO members cannot have
+     * initializers. Array specifiers ({@code [N]}) are preserved.
+     */
+    private static String wrapLooseUniformsInUbo(final String glslSource) {
+        Matcher matcher = LOOSE_UNIFORM.matcher(glslSource);
+        List<String> members = new ArrayList<>();
+        List<int[]> positions = new ArrayList<>(); // [start, end] of each match
+
+        while (matcher.find()) {
+            String type = matcher.group(1);
+            String name = matcher.group(2);
+            String arraySpec = matcher.group(3);
+            members.add(type + " " + name + (arraySpec != null ? arraySpec : "") + ";");
+            positions.add(new int[]{matcher.start(), matcher.end()});
+        }
+
+        if (members.isEmpty()) {
+            return glslSource;
+        }
+
+        StringBuilder ubo = new StringBuilder();
+        ubo.append("layout(std140) uniform iris_LooseUniforms {\n");
+        for (String member : members) {
+            ubo.append("    ").append(member).append("\n");
+        }
+        ubo.append("};\n");
+
+        // Replace first uniform with the UBO block; remove the rest.
+        StringBuilder result = new StringBuilder(glslSource.length() + ubo.length());
+        int lastPos = 0;
+        for (int i = 0; i < positions.size(); i++) {
+            int[] pos = positions.get(i);
+            result.append(glslSource, lastPos, pos[0]);
+            if (i == 0) {
+                result.append(ubo);
+            }
+            lastPos = pos[1];
+        }
+        result.append(glslSource, lastPos, glslSource.length());
+        return result.toString();
+    }
+
+    /**
+     * Adds {@code layout(location=N)} to every top-level {@code in}/{@code out}
+     * declaration that doesn't already have a layout qualifier. Locations are
+     * assigned sequentially, with separate counters for {@code in} and
+     * {@code out}.
+     *
+     * <p>Handles optional interpolation qualifiers (flat, smooth, noperspective,
+     * centroid, invariant, precise) that appear before the storage qualifier.
+     */
+    private static String addLayoutLocationsToInOut(final String glslSource) {
         Matcher matcher = UNLOCATED_IN_OUT.matcher(glslSource);
         if (!matcher.find()) {
             return glslSource;
@@ -262,11 +395,18 @@ public final class MetalIrisBridge {
         StringBuffer result = new StringBuffer(glslSource.length() + 128);
         matcher.reset();
         while (matcher.find()) {
-            String qualifier = matcher.group(1);
-            String type = matcher.group(2);
-            String names = matcher.group(3).trim();
-            int location = "in".equals(qualifier) ? inLocation++ : outLocation++;
-            String replacement = "layout(location = " + location + ") " + qualifier + " " + type + " " + names + ";";
+            String fullMatch = matcher.group(0);
+            // Skip if this declaration already has a layout qualifier anywhere.
+            if (fullMatch.contains("layout")) {
+                matcher.appendReplacement(result, Matcher.quoteReplacement(fullMatch));
+                continue;
+            }
+            String qualifiers = matcher.group(1); // e.g. "flat " or ""
+            String storage = matcher.group(2);     // "in" or "out"
+            String type = matcher.group(3);
+            String names = matcher.group(4).trim();
+            int location = "in".equals(storage) ? inLocation++ : outLocation++;
+            String replacement = "layout(location = " + location + ") " + qualifiers + storage + " " + type + " " + names + ";";
             matcher.appendReplacement(result, Matcher.quoteReplacement(replacement));
         }
         matcher.appendTail(result);
