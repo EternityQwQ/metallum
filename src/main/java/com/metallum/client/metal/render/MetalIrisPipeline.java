@@ -1,7 +1,6 @@
 package com.metallum.client.metal.render;
 
 import com.metallum.client.metal.render.bridge.MetalNativeBridge;
-import com.metallum.client.metal.render.mtl.MTLColorWriteMask;
 import com.metallum.client.metal.render.mtl.MTLCompareFunction;
 import com.metallum.client.metal.render.mtl.MTLPixelFormat;
 import com.metallum.client.metal.render.mtl.MTLRenderPipelineDescriptor;
@@ -61,7 +60,7 @@ final class MetalIrisPipeline implements AutoCloseable {
      * @param name           debug name (e.g. "final", "composite1")
      * @param vertexMsl      compiled MSL vertex shader source
      * @param fragmentMsl    compiled MSL fragment shader source
-     * @param colorFormat    the color attachment pixel format
+     * @param colorFormat    the single color attachment pixel format
      * @param hasDepth       whether a depth attachment will be used
      */
     MetalIrisPipeline(
@@ -70,6 +69,27 @@ final class MetalIrisPipeline implements AutoCloseable {
             final String vertexMsl,
             final String fragmentMsl,
             final MTLPixelFormat colorFormat,
+            final boolean hasDepth
+    ) {
+        this(device, name, vertexMsl, fragmentMsl, new MTLPixelFormat[]{colorFormat}, hasDepth);
+    }
+
+    /**
+     * Multi-render-target constructor. {@code colorFormats} specifies the
+     * pixel format of each color attachment (index 0 = colortex0, etc.).
+     * Used by Iris gbuffer/composite/deferred passes that write to multiple
+     * colortex outputs simultaneously.
+     *
+     * @param colorFormats   array of color attachment pixel formats (1-8);
+     *                       index 0 is the primary attachment
+     * @param hasDepth       whether a depth attachment will be used
+     */
+    MetalIrisPipeline(
+            final MetalDevice device,
+            final String name,
+            final String vertexMsl,
+            final String fragmentMsl,
+            final MTLPixelFormat[] colorFormats,
             final boolean hasDepth
     ) {
         this.name = name;
@@ -88,24 +108,24 @@ final class MetalIrisPipeline implements AutoCloseable {
         }
 
         this.pipelineWithDepth = hasDepth
-                ? createPipelineState(device, vertexFn, fragmentFn, colorFormat, MTLPixelFormat.Depth32Float)
+                ? createPipelineState(device, vertexFn, fragmentFn, colorFormats, MTLPixelFormat.Depth32Float)
                 : MemorySegment.NULL;
-        this.pipelineWithoutDepth = createPipelineState(device, vertexFn, fragmentFn, colorFormat, MTLPixelFormat.Invalid);
+        this.pipelineWithoutDepth = createPipelineState(device, vertexFn, fragmentFn, colorFormats, MTLPixelFormat.Invalid);
 
         this.depthStencilState = hasDepth
                 ? MetalNativeBridge.MTLDevice_makeDepthStencilState(
                         device.metalDeviceHandle(), MTLCompareFunction.Always, 0)
                 : MemorySegment.NULL;
 
-        LOGGER.info("[MetalUniversal] MetalIrisPipeline '{}' created (colorFormat={}, hasDepth={})",
-                name, colorFormat, hasDepth);
+        LOGGER.info("[MetalUniversal] MetalIrisPipeline '{}' created (colorAttachments={}, hasDepth={})",
+                name, colorFormats.length, hasDepth);
     }
 
     private static MemorySegment createPipelineState(
             final MetalDevice device,
             final MemorySegment vertexFn,
             final MemorySegment fragmentFn,
-            final MTLPixelFormat colorFormat,
+            final MTLPixelFormat[] colorFormats,
             final MTLPixelFormat depthFormat
     ) {
         try (MTLRenderPipelineDescriptor desc = new MTLRenderPipelineDescriptor()) {
@@ -116,9 +136,16 @@ final class MetalIrisPipeline implements AutoCloseable {
             try (MTLVertexDescriptor vertexDesc = new MTLVertexDescriptor()) {
                 desc.setVertexDescriptor(vertexDesc);
             }
-            desc.setAttachmentFormats(colorFormat, depthFormat, MTLPixelFormat.Invalid);
-            // Disable blending for now (final pass writes directly)
-            desc.disableBlending(MTLColorWriteMask.All.value);
+            // Attachment 0 + depth + stencil via the existing single call
+            // (sets colorAttachments[0].pixelFormat, depthAttachmentPixelFormat,
+            // stencilAttachmentPixelFormat in one native call).
+            desc.setAttachmentFormats(colorFormats[0], depthFormat, MTLPixelFormat.Invalid);
+            desc.disableBlendingForAttachment(0);
+            // Additional color attachments (MRT) for colortex1..N-1.
+            for (int i = 1; i < colorFormats.length; i++) {
+                desc.setColorAttachmentFormat(i, colorFormats[i]);
+                desc.disableBlendingForAttachment(i);
+            }
 
             MemorySegment pipeline = MetalNativeBridge.metallum_MTLDevice_makeRenderPipelineState(
                     device.metalDeviceHandle(), desc.handle());

@@ -17,6 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.foreign.MemorySegment;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -261,6 +262,163 @@ public final class MetalIrisRenderer {
         // Clean up the per-frame render target.
         renderTargetTex.close();
 
+        return success;
+    }
+
+    /**
+     * Gets or creates a cached {@link MetalIrisPipeline} with multiple color
+     * attachments (MRT).
+     */
+    private static MetalIrisPipeline getOrCreatePipelineMulti(
+            final MetalDevice device,
+            final String name,
+            final String vertexMsl,
+            final String fragmentMsl,
+            final MTLPixelFormat[] colorFormats,
+            final boolean hasDepth
+    ) {
+        return pipelineCache.computeIfAbsent(name, n -> new MetalIrisPipeline(
+                device, n, vertexMsl, fragmentMsl, colorFormats, hasDepth
+        ));
+    }
+
+    /**
+     * Renders a fullscreen triangle to multiple color attachments (MRT).
+     *
+     * <p>Uses {@link MetalCommandEncoder#renderCommandEncoderMulti} to create
+     * a render pass with up to 8 color attachments. Dummy textures are bound
+     * to sampler slots 0–7 so reads from unbound colortex samplers don't read
+     * garbage.
+     *
+     * @param device      the Metal device
+     * @param pipeline    the compiled Iris pipeline (must have been created
+     *                    with matching {@code colorFormats})
+     * @param colorViews  array of color attachment views (entries may be
+     *                    {@code null} to leave that slot unbound)
+     * @param colorCount  number of entries in {@code colorViews}
+     * @param width       viewport width
+     * @param height      viewport height
+     * @return {@code true} if the draw call was issued successfully
+     */
+    private static boolean renderFullscreenPassMulti(
+            final MetalDevice device,
+            final MetalIrisPipeline pipeline,
+            final MetalGpuTextureView[] colorViews,
+            final int colorCount,
+            final int width,
+            final int height
+    ) {
+        try {
+            MetalCommandEncoder encoder = device.createCommandEncoder();
+            MTLRenderCommandEncoder renderEnc = encoder.renderCommandEncoderMulti(
+                    colorViews, colorCount, null,
+                    width, height,
+                    true, // clearColorEnabled — clear all attachments to black
+                    0.0f, 0.0f, 0.0f, 0.0f,
+                    false, 0.0 // no depth
+            );
+
+            renderEnc.setRenderPipelineState(pipeline.pipelineState(false));
+
+            // Bind dummy textures to sampler slots 0–7. Composite/deferred
+            // passes read colortex0–7; without bound textures Metal would
+            // read garbage or crash. (Real read-back of previous pass output
+            // is future work — this validates the MRT write path.)
+            MemorySegment dummyTex = getDummyTexture(device);
+            if (!MetalNativeBridge.isNullHandle(dummyTex)) {
+                for (int i = 0; i < MAX_TEXTURE_SLOTS; i++) {
+                    renderEnc.setTexture(dummyTex, i, STAGE_ALL);
+                }
+            }
+
+            renderEnc.drawPrimitives(MTLPrimitiveType.Triangle, 0, 3, 1, 0);
+
+            LOGGER.info("[MetalUniversal] Rendered MRT pass '{}' ({} attachments, {}x{})",
+                    pipeline.name(), colorCount, width, height);
+            return true;
+        } catch (Throwable t) {
+            LOGGER.error("[MetalUniversal] Failed to render MRT pass '{}'", pipeline.name(), t);
+            return false;
+        }
+    }
+
+    /**
+     * Renders an Iris composite/deferred pass to a set of HDR MRT render
+     * targets.
+     *
+     * <p>This is the M4e entry point for fullscreen passes that write to
+     * multiple colortex outputs (composite1, deferred1, ...). It:
+     * <ol>
+     *   <li>Creates {@code colorAttachmentCount} RGBA16F render target textures</li>
+     *   <li>Gets/creates a cached {@link MetalIrisPipeline} with those formats</li>
+     *   <li>Renders a fullscreen triangle to all attachments</li>
+     * </ol>
+     *
+     * <p>The render targets are released immediately after the draw call
+     * (deferred-release is safe — the GPU finishes using them before they're
+     * freed). Real composite chaining (reading previous pass output as
+     * sampler input, ping-ponging between target sets) is future work; this
+     * implementation validates that the MRT draw call executes without crash.
+     *
+     * @param name                program name (e.g. "composite1", "deferred1")
+     * @param vertexMsl           compiled MSL vertex source
+     * @param fragmentMsl         compiled MSL fragment source
+     * @param width               viewport width
+     * @param height              viewport height
+     * @param colorAttachmentCount number of MRT color attachments (1-8)
+     * @return {@code true} if the pass rendered successfully
+     */
+    public static boolean renderCompositePass(
+            final String name,
+            final String vertexMsl,
+            final String fragmentMsl,
+            final int width,
+            final int height,
+            final int colorAttachmentCount
+    ) {
+        MetalDevice device = getMetalDevice();
+        if (device == null) {
+            LOGGER.warn("[MetalUniversal] Cannot render composite pass '{}': MetalDevice not available", name);
+            return false;
+        }
+
+        int count = Math.max(1, Math.min(colorAttachmentCount, MAX_TEXTURE_SLOTS));
+        MTLPixelFormat[] formats = new MTLPixelFormat[count];
+        Arrays.fill(formats, MTLPixelFormat.RGBA16Float);
+
+        MetalIrisPipeline pipeline;
+        try {
+            pipeline = getOrCreatePipelineMulti(device, name, vertexMsl, fragmentMsl, formats, false);
+        } catch (Exception e) {
+            LOGGER.error("[MetalUniversal] Failed to create MetalIrisPipeline for '{}'", name, e);
+            return false;
+        }
+
+        GpuTexture[] textures = new GpuTexture[count];
+        MetalGpuTextureView[] colorViews = new MetalGpuTextureView[count];
+        boolean success;
+        try {
+            for (int i = 0; i < count; i++) {
+                textures[i] = device.createTexture(
+                        "iris_" + name + "_colortex" + i,
+                        GpuTexture.USAGE_RENDER_ATTACHMENT,
+                        GpuFormat.RGBA16_FLOAT,
+                        width, height, 1, 1
+                );
+                GpuTextureView view = device.createTextureView(textures[i]);
+                colorViews[i] = (MetalGpuTextureView) view;
+            }
+            success = renderFullscreenPassMulti(device, pipeline, colorViews, count, width, height);
+        } finally {
+            for (GpuTexture t : textures) {
+                if (t != null) {
+                    // Deferred-release: safe to close immediately, the GPU
+                    // retains the texture until the current command buffer
+                    // finishes execution.
+                    t.close();
+                }
+            }
+        }
         return success;
     }
 

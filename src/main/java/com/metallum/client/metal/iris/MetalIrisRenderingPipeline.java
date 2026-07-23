@@ -118,6 +118,14 @@ public class MetalIrisRenderingPipeline implements WorldRenderingPipeline {
         Object2ObjectMaps.emptyMap();
 
     /**
+     * Number of MRT color attachments used for composite/deferred passes.
+     * Most shaderpacks write colortex0–3 in these passes; 4 covers the common
+     * case. Shaders writing colortex4–7 will fail pipeline creation (caught
+     * and logged) — this can be raised if needed.
+     */
+    private static final int COMPOSITE_MRT_COUNT = 4;
+
+    /**
      * Compiles all shaderpack programs from GLSL to Metal Shading Language
      * via {@link MetalIrisBridge}, validating the GLSL→SPIR-V→MSL pipeline.
      *
@@ -429,25 +437,81 @@ public class MetalIrisRenderingPipeline implements WorldRenderingPipeline {
 
     @Override
     public void finalizeLevelRendering() {
-        // M4c: Render the "final" Iris pass to an offscreen render target.
-        // The final pass reads colortex0+ and writes the final screen image.
-        // Currently renders to an offscreen RGBA8 texture (not yet presented
-        // to screen — that integration is future work).
-        MetalIrisBridge.ShaderPair finalShaders = compiledShaders.get("final");
-        if (finalShaders == null) {
+        // M4e: Render the Iris fullscreen pass chain.
+        //
+        // Composite/deferred/prepare/shadowcomp passes are fullscreen passes
+        // that write to multiple colortex outputs (MRT) — rendered via
+        // MetalIrisRenderer.renderCompositePass. The "final" pass is rendered
+        // last to a single RGBA8 target.
+        //
+        // Geometry passes (gbuffers_*, shadow*, dh_*) are NOT rendered here —
+        // they require redirecting Minecraft's terrain/entity draws into the
+        // gbuffer MRT targets (vertex buffers, attribute binding), which is a
+        // separate, larger effort.
+        //
+        // All rendering is best-effort and wrapped in try/catch so a single
+        // failing pass doesn't prevent the rest.
+        int width;
+        int height;
+        try {
+            width = net.minecraft.client.Minecraft.getInstance().getWindow().getWidth();
+            height = net.minecraft.client.Minecraft.getInstance().getWindow().getHeight();
+        } catch (Throwable t) {
+            LOGGER.warn("[MetalUniversal] Could not resolve window size, skipping Iris passes", t);
             return;
         }
-        try {
-            int width = net.minecraft.client.Minecraft.getInstance().getWindow().getWidth();
-            int height = net.minecraft.client.Minecraft.getInstance().getWindow().getHeight();
-            MetalIrisRenderer.renderFinalPass(
-                    finalShaders.vertex().source(),
-                    finalShaders.fragment().source(),
-                    width, height
-            );
-        } catch (Throwable t) {
-            LOGGER.error("[MetalUniversal] Failed to render final pass", t);
+
+        // Run fullscreen composite-type passes (MRT) first.
+        for (Map.Entry<String, MetalIrisBridge.ShaderPair> entry : compiledShaders.entrySet()) {
+            String name = entry.getKey();
+            if (!isFullscreenCompositePass(name)) {
+                continue;
+            }
+            MetalIrisBridge.ShaderPair shaders = entry.getValue();
+            try {
+                MetalIrisRenderer.renderCompositePass(
+                        name,
+                        shaders.vertex().source(),
+                        shaders.fragment().source(),
+                        width, height,
+                        COMPOSITE_MRT_COUNT
+                );
+            } catch (Throwable t) {
+                LOGGER.error("[MetalUniversal] Failed to render composite pass '{}'", name, t);
+            }
         }
+
+        // Render the "final" pass last (single attachment).
+        MetalIrisBridge.ShaderPair finalShaders = compiledShaders.get("final");
+        if (finalShaders != null) {
+            try {
+                MetalIrisRenderer.renderFinalPass(
+                        finalShaders.vertex().source(),
+                        finalShaders.fragment().source(),
+                        width, height
+                );
+            } catch (Throwable t) {
+                LOGGER.error("[MetalUniversal] Failed to render final pass", t);
+            }
+        }
+    }
+
+    /**
+     * Determines whether a program name corresponds to a fullscreen
+     * composite-type pass (composite/deferred/prepare/shadowcomp/setup/begin).
+     * These are rendered via the MRT fullscreen path. Geometry passes
+     * (gbuffers_*, shadow*, dh_*) return {@code false}.
+     */
+    private static boolean isFullscreenCompositePass(final String name) {
+        if (name == null || name.isEmpty()) {
+            return false;
+        }
+        return name.startsWith("composite")
+                || name.startsWith("deferred")
+                || name.startsWith("prepare")
+                || name.startsWith("shadowcomp")
+                || name.equals("setup")
+                || name.equals("begin");
     }
 
     @Override
