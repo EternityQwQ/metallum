@@ -11,6 +11,7 @@
     "iris.MixinIris",
     "iris.MixinIrisRenderSystem",
     "iris.MixinMetalGpuTexture",
+    "iris.MixinVanillaRenderingPipeline",
     "render.PreferredGraphicsApiMixin",
     "sodium.DrawBackendMixin",
     "sodium.DrawContextMixin",
