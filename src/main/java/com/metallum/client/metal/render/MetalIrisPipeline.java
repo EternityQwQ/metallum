@@ -2,8 +2,11 @@ package com.metallum.client.metal.render;
 
 import com.metallum.client.metal.render.bridge.MetalNativeBridge;
 import com.metallum.client.metal.render.mtl.MTLCompareFunction;
+import com.metallum.client.metal.render.mtl.MTLCullMode;
 import com.metallum.client.metal.render.mtl.MTLPixelFormat;
+import com.metallum.client.metal.render.mtl.MTLPrimitiveType;
 import com.metallum.client.metal.render.mtl.MTLRenderPipelineDescriptor;
+import com.metallum.client.metal.render.mtl.MTLTriangleFillMode;
 import com.metallum.client.metal.render.mtl.MTLVertexDescriptor;
 import com.metallum.client.metal.render.mtl.MTLVertexFormat;
 import com.metallum.client.metal.render.mtl.MTLVertexStepFunction;
@@ -56,6 +59,19 @@ import java.util.regex.Pattern;
  * {@link #firstAvailableVertexBufferSlot()} getters expose the descriptor's
  * layout so the draw path (M5c) can bind vertex buffers to the correct Metal
  * slots.
+ *
+ * <h2>M5d-1 — Pipeline-state swap surface</h2>
+ * Exposes the draw-state getters ({@link #getNativePipeline(boolean)},
+ * {@link #depthStencilState()}, {@link #cullMode()}, {@link #fillMode()},
+ * {@link #topology()}, {@link #depthBiasConstant()},
+ * {@link #depthBiasScaleFactor()}) that {@code MetalRenderPass.bindDrawState}
+ * needs to substitute this pipeline's native {@code MTLRenderPipelineState} for
+ * vanilla's when the Iris pipeline swap is enabled. Iris gbuffers pipelines
+ * carry no {@code RenderPipeline} descriptor, so these return fixed safe
+ * defaults (no cull, fill, triangle list, zero depth bias). Uniform/sampler
+ * binding for the Iris MSL is added in M5d-2/M5d-3; until then the swap is
+ * gated off by {@code MetalIrisRenderer.pipelineSwapEnabled} (default false) so
+ * vanilla rendering is unaffected.
  */
 final class MetalIrisPipeline implements AutoCloseable {
     private static final Logger LOGGER = LoggerFactory.getLogger("MetalUniversal");
@@ -83,6 +99,20 @@ final class MetalIrisPipeline implements AutoCloseable {
      * the way vanilla pipelines do).
      */
     private final int firstAvailableVertexBufferSlot;
+    /**
+     * Fixed draw-state defaults (M5d-1). Iris gbuffers pipelines don't carry
+     * a {@code RenderPipeline} descriptor, so these mirror vanilla's safe
+     * defaults for opaque scene draws. They are exposed via getters so
+     * {@code MetalRenderPass.bindDrawState} can substitute the Iris pipeline
+     * state for vanilla's when the pipeline swap is enabled. Cull mode is
+     * {@code None} (no culling) as a conservative default — overdraw, but no
+     * accidentally-culled geometry while the swap is being brought up.
+     */
+    private final MTLCullMode cullMode = MTLCullMode.None;
+    private final MTLTriangleFillMode fillMode = MTLTriangleFillMode.Fill;
+    private final MTLPrimitiveType topology = MTLPrimitiveType.Triangle;
+    private final float depthBiasConstant = 0.0f;
+    private final float depthBiasScaleFactor = 0.0f;
     private boolean closed;
 
     /**
@@ -338,6 +368,41 @@ final class MetalIrisPipeline implements AutoCloseable {
      */
     int firstAvailableVertexBufferSlot() {
         return this.firstAvailableVertexBufferSlot;
+    }
+
+    /**
+     * Returns the native pipeline-state handle to bind, selecting the
+     * depth-enabled variant when {@code useDepth} is true (M5d-1). Analogous
+     * to {@code MetalCompiledRenderPipeline.getNativePipeline}.
+     */
+    MemorySegment getNativePipeline(final boolean useDepth) {
+        return useDepth && pipelineWithDepth != MemorySegment.NULL
+                ? pipelineWithDepth
+                : pipelineWithoutDepth;
+    }
+
+    /**
+     * Returns the draw-state defaults (M5d-1) used when this pipeline is
+     * substituted for vanilla's in {@code MetalRenderPass.bindDrawState}.
+     */
+    MTLCullMode cullMode() {
+        return cullMode;
+    }
+
+    MTLTriangleFillMode fillMode() {
+        return fillMode;
+    }
+
+    MTLPrimitiveType topology() {
+        return topology;
+    }
+
+    float depthBiasConstant() {
+        return depthBiasConstant;
+    }
+
+    float depthBiasScaleFactor() {
+        return depthBiasScaleFactor;
     }
 
     @Override

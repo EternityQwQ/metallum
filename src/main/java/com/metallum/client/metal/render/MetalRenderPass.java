@@ -52,6 +52,18 @@ final class MetalRenderPass implements RenderPassBackend {
     private long dirtyDescriptorMask;
     @Nullable
     private MetalCompiledRenderPipeline compiledPipeline;
+    /**
+     * When non-null, substitutes the Iris gbuffers pipeline for vanilla's
+     * during {@link #bindDrawState} (M5d-1). Set by {@link #setPipeline} when
+     * {@link MetalIrisRenderer#isPipelineSwapEnabled()} is true and a cached
+     * Iris gbuffers pipeline exists for the active phase. While non-null, the
+     * native pipeline state, depth stencil, cull/fill mode, topology and vertex
+     * buffer layout all come from the Iris pipeline, and the vanilla named-
+     * resource descriptor loop is skipped. Uniform/sampler binding for the Iris
+     * MSL is added in M5d-2/M5d-3.
+     */
+    @Nullable
+    private MetalIrisPipeline irisPipeline;
     @Nullable
     private GpuBuffer indexBuffer;
     private MTLIndexType indexType = MTLIndexType.UInt16;
@@ -106,6 +118,21 @@ final class MetalRenderPass implements RenderPassBackend {
         MetalCompiledRenderPipeline compiled = device.getOrCompilePipeline(pipeline);
         if (this.compiledPipeline != compiled) {
             this.compiledPipeline = compiled;
+            vertexBuffersDirty = true;
+            pipelineDirty = true;
+        }
+        // M5d-1: when the Iris pipeline swap is enabled and a gbuffers phase is
+        // active, resolve the cached Iris gbuffers pipeline. If found,
+        // bindDrawState substitutes its native pipeline state (and vertex
+        // buffer layout) for vanilla's. Uniform/sampler binding for the Iris
+        // MSL is added in M5d-2/M5d-3; until then the swap is gated off by
+        // MetalIrisRenderer.pipelineSwapEnabled (default false), so vanilla
+        // rendering is unaffected.
+        MetalIrisPipeline resolved = MetalIrisRenderer.isPipelineSwapEnabled()
+                ? MetalIrisRenderer.getActiveIrisPipeline()
+                : null;
+        if (this.irisPipeline != resolved) {
+            this.irisPipeline = resolved;
             vertexBuffersDirty = true;
             pipelineDirty = true;
         }
@@ -385,8 +412,18 @@ final class MetalRenderPass implements RenderPassBackend {
     }
 
     private void pushVertexBuffers(final MTLRenderCommandEncoder enc) {
-        int firstSlot = compiledPipeline.firstAvailableVertexBufferSlot();
-        int count = compiledPipeline.vertexBufferCount();
+        // M5d-1: vertex buffer layout comes from the Iris pipeline when the
+        // override is active (its firstAvailableVertexBufferSlot is 0 and its
+        // vertexBufferCount matches the gbuffers vertex descriptor).
+        int firstSlot;
+        int count;
+        if (irisPipeline != null) {
+            firstSlot = irisPipeline.firstAvailableVertexBufferSlot();
+            count = irisPipeline.vertexBufferCount();
+        } else {
+            firstSlot = compiledPipeline.firstAvailableVertexBufferSlot();
+            count = compiledPipeline.vertexBufferCount();
+        }
         for (int slot = 0; slot < count; slot++) {
             GpuBufferSlice vertexBuffer = vertexBuffers[slot];
             if (vertexBuffer == null) {
@@ -469,7 +506,33 @@ final class MetalRenderPass implements RenderPassBackend {
 
         if (pipelineDirty) {
             boolean useDepth = depthAttachmentFormat().value != MTLPixelFormat.Invalid.value;
-            MemorySegment pipelineHandle = compiledPipeline.getNativePipeline(useDepth);
+            // M5d-1: when an Iris gbuffers pipeline override is active, bind its
+            // native pipeline state / depth stencil / draw state instead of
+            // vanilla's. The Iris MSL uses a different (SPIR-V-cross) binding
+            // convention than vanilla's named-resource model, so the vanilla
+            // descriptor loop below is skipped while the override is active;
+            // Iris UBO/sampler binding is added in M5d-2/M5d-3.
+            MemorySegment pipelineHandle;
+            MemorySegment depthState;
+            float depthBiasConstant;
+            float depthBiasScaleFactor;
+            MTLCullMode cullMode;
+            MTLTriangleFillMode fillMode;
+            if (irisPipeline != null) {
+                pipelineHandle = irisPipeline.getNativePipeline(useDepth);
+                depthState = irisPipeline.depthStencilState();
+                depthBiasConstant = irisPipeline.depthBiasConstant();
+                depthBiasScaleFactor = irisPipeline.depthBiasScaleFactor();
+                cullMode = irisPipeline.cullMode();
+                fillMode = irisPipeline.fillMode();
+            } else {
+                pipelineHandle = compiledPipeline.getNativePipeline(useDepth);
+                depthState = compiledPipeline.getDepthStencilState();
+                depthBiasConstant = compiledPipeline.depthBiasConstant();
+                depthBiasScaleFactor = compiledPipeline.depthBiasScaleFactor();
+                cullMode = compiledPipeline.cullMode();
+                fillMode = compiledPipeline.fillMode();
+            }
             if (MetalNativeBridge.isNullHandle(pipelineHandle)) {
                 throw new IllegalStateException("Native pipeline is unavailable");
             }
@@ -477,23 +540,20 @@ final class MetalRenderPass implements RenderPassBackend {
             pipelineDirty = false;
 
             if (useDepth) {
-                MemorySegment depthState = compiledPipeline.getDepthStencilState();
                 if (MetalNativeBridge.isNullHandle(depthState)) {
                     throw new IllegalStateException("Native depth state is unavailable");
                 }
                 enc.setDepthStencilState(depthState);
-                enc.setDepthBias(
-                        compiledPipeline.depthBiasConstant(),
-                        compiledPipeline.depthBiasScaleFactor(),
-                        0.0f
-                );
+                enc.setDepthBias(depthBiasConstant, depthBiasScaleFactor, 0.0f);
             }
 
             enc.setFrontFacingWinding(MTLWinding.Clockwise);
-            enc.setCullMode(compiledPipeline.cullMode());
-            enc.setTriangleFillMode(compiledPipeline.fillMode());
+            enc.setCullMode(cullMode);
+            enc.setTriangleFillMode(fillMode);
 
-            dirtyDescriptorMask |= compiledPipeline.allResourceMask();
+            if (irisPipeline == null) {
+                dirtyDescriptorMask |= compiledPipeline.allResourceMask();
+            }
         }
 
         if (scissorDirty) {
@@ -506,7 +566,7 @@ final class MetalRenderPass implements RenderPassBackend {
             vertexBuffersDirty = false;
         }
 
-        if (dirtyDescriptorMask != 0) {
+        if (irisPipeline == null && dirtyDescriptorMask != 0) {
             for (MetalCompiledRenderPipeline.ResourceBinding binding : compiledPipeline.resources()) {
                 if ((dirtyDescriptorMask & (1L << binding.bindingIndex())) != 0L) {
                     pushDescriptor(enc, binding);
@@ -521,7 +581,7 @@ final class MetalRenderPass implements RenderPassBackend {
         if (compiledPipeline == null) {
             throw new IllegalStateException("Pipeline is missing");
         }
-        return compiledPipeline.topology();
+        return irisPipeline != null ? irisPipeline.topology() : compiledPipeline.topology();
     }
 
     private void pushEffectiveScissor(final MTLRenderCommandEncoder enc) {

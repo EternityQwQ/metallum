@@ -141,6 +141,43 @@ public final class MetalIrisRenderer {
     }
 
     /**
+     * Whether {@code MetalRenderPass} should substitute the Iris gbuffers
+     * pipeline for vanilla's when a gbuffers phase is active (M5d-1).
+     *
+     * <p>Defaults to {@code false}: the native pipeline state, vertex buffers,
+     * uniforms and samplers all continue to come from the vanilla
+     * {@code MetalCompiledRenderPipeline}, so vanilla rendering is completely
+     * unaffected. This flag is the staging gate for the multi-commit M5d
+     * pipeline swap — it is flipped to {@code true} only once the Iris uniform
+     * (M5d-2) and sampler (M5d-3) binding is in place, so the Iris MSL never
+     * runs with unbound UBOs/samplers.
+     */
+    private static volatile boolean pipelineSwapEnabled = false;
+
+    public static boolean isPipelineSwapEnabled() {
+        return pipelineSwapEnabled;
+    }
+
+    public static void setPipelineSwapEnabled(final boolean enabled) {
+        pipelineSwapEnabled = enabled;
+    }
+
+    /**
+     * Returns the cached {@link MetalIrisPipeline} for the active gbuffers
+     * program, or {@code null} if no gbuffers phase is active or the program
+     * has not been cached yet (M5d-1).
+     *
+     * <p>{@code MetalRenderPass.setPipeline} calls this (when
+     * {@link #isPipelineSwapEnabled()} is true) to obtain the Iris pipeline
+     * whose native state {@code bindDrawState} will substitute for vanilla's.
+     * A {@code null} return leaves the vanilla pipeline in effect.
+     */
+    static MetalIrisPipeline getActiveIrisPipeline() {
+        final String name = activeGbuffersProgram;
+        return name == null ? null : pipelineCache.get(name);
+    }
+
+    /**
      * The final-pass render target view produced by {@link #renderFinalPass},
      * handed off to {@link MetalSurface#blitFromTexture} for presentation.
      *
@@ -1174,6 +1211,10 @@ public final class MetalIrisRenderer {
         releaseCompositeTargets();
         releaseGbufferTargets();
         releaseShadowTarget();
+        // The pipeline cache is now empty, so any active gbuffers program /
+        // swap flag would reference stale state. Clear both (M5d-1).
+        activeGbuffersProgram = null;
+        pipelineSwapEnabled = false;
         // Release any pending final-pass view that was never presented.
         MetalGpuTextureView stale = pendingFinalPassView.getAndSet(null);
         if (stale != null) {
