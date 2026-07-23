@@ -51,6 +51,26 @@ import java.util.concurrent.atomic.AtomicReference;
  * "read set" as samplers, writes the "write set", then swaps — so
  * composite1 → composite2 → … → final chain correctly. The final pass reads
  * the last composite output as its samplers.
+ *
+ * <h2>M4h — Geometry &amp; shadow pass targets</h2>
+ * Sets up the render-target half of Iris geometry passes:
+ * <ul>
+ *   <li>A persistent gbuffer MRT pool ({@link #ensureGbufferTargets}) of
+ *       {@value #GBUFFER_MRT_COUNT} RGBA8 color attachments (colortex0–3) plus
+ *       a depth32Float attachment, recreated on screen-size change.</li>
+ *   <li>A persistent shadow-map depth target ({@link #ensureShadowTarget}) at
+ *       {@value #SHADOW_MAP_SIZE}×{@value #SHADOW_MAP_SIZE}.</li>
+ *   <li>{@link #beginGeometryPass} / {@link #endGeometryPass} and
+ *       {@link #beginShadowPass} / {@link #endShadowPass} which create a
+ *       render command encoder with the Iris gbuffers/shadow pipeline bound,
+ *       ready for the caller to issue vertex-buffer draws.</li>
+ * </ul>
+ * The actual scene-draw redirection (intercepting vanilla terrain/entity
+ * draws to route them through these encoders) is a separate, larger effort
+ * — this milestone provides the render targets and encoder API that such a
+ * redirect would plug into. The composite passes can already sample the
+ * gbuffer color/depth and shadow map via {@link #getGbufferColorViews},
+ * {@link #getGbufferDepthView}, and {@link #getShadowMapView}.
  */
 public final class MetalIrisRenderer {
     private static final Logger LOGGER = LoggerFactory.getLogger("MetalUniversal");
@@ -60,6 +80,26 @@ public final class MetalIrisRenderer {
 
     /** Maximum number of texture slots to bind dummy textures to. */
     private static final int MAX_TEXTURE_SLOTS = 8;
+
+    /** Stage mask: vertex only (for vertex-buffer/uniform binding). */
+    private static final int STAGE_VERTEX = (int) MTLRenderStages.Vertex.value;
+
+    /** Stage mask: fragment only (for fragment-buffer/uniform binding). */
+    private static final int STAGE_FRAGMENT = (int) MTLRenderStages.Fragment.value;
+
+    /**
+     * Number of MRT color attachments in the gbuffer target pool (M4h).
+     * Matches the Iris default gbuffer layout: colortex0 (albedo),
+     * colortex1 (normals), colortex2 (specular), colortex3 (lightmap).
+     */
+    private static final int GBUFFER_MRT_COUNT = 4;
+
+    /**
+     * Shadow map render target dimension (M4h). Iris renders the shadow map
+     * to a square depth texture at this resolution; shaderpacks may request a
+     * different size, but this is a reasonable default for the scaffolding.
+     */
+    private static final int SHADOW_MAP_SIZE = 2048;
 
     /** Cache of MetalIrisPipeline objects, keyed by program name. */
     private static final Map<String, MetalIrisPipeline> pipelineCache = new HashMap<>();
@@ -103,6 +143,36 @@ public final class MetalIrisRenderer {
     private static boolean compositeReadIsA = true;
     private static int compositeTargetWidth = 0;
     private static int compositeTargetHeight = 0;
+
+    // ---- Gbuffer MRT target pool (M4h) ----
+
+    /**
+     * Persistent gbuffer MRT color attachments (M4h). colortex0–3 as RGBA8,
+     * matching the Iris default gbuffer layout. Recreated on screen-size
+     * change. Used both as render targets (during gbuffers passes) and as
+     * sampler inputs (during composite/deferred passes).
+     */
+    private static GpuTexture[] gbufferColorTextures = null;
+    private static MetalGpuTextureView[] gbufferColorViews = null;
+    private static GpuTexture gbufferDepthTexture = null;
+    private static MetalGpuTextureView gbufferDepthView = null;
+    private static int gbufferTargetWidth = 0;
+    private static int gbufferTargetHeight = 0;
+
+    // ---- Shadow map target (M4h) ----
+
+    /**
+     * Persistent shadow-map depth target (M4h). A square depth32Float texture
+     * at {@link #SHADOW_MAP_SIZE}, rendered to during the shadow pass and
+     * sampled during composite/deferred passes. Color writes are disabled for
+     * the shadow pass, so no color attachment is needed — a tiny 1×1 dummy
+     * color texture is used only because the render-encoder wrapper requires
+     * a non-null color attachment.
+     */
+    private static GpuTexture shadowDepthTexture = null;
+    private static MetalGpuTextureView shadowDepthView = null;
+    private static GpuTexture shadowDummyColorTexture = null;
+    private static MetalGpuTextureView shadowDummyColorView = null;
 
     private MetalIrisRenderer() {
     }
@@ -647,10 +717,349 @@ public final class MetalIrisRenderer {
         return success;
     }
 
+    // ---- Gbuffer MRT target pool (M4h) ----
+
     /**
-     * Clears the pipeline cache and composite target pool. Called when the
-     * MetalIrisRenderingPipeline is destroyed (shaderpack reload) to free
-     * cached pipeline states and HDR render targets.
+     * Ensures the gbuffer MRT target pool exists and matches the given
+     * dimensions, recreating the textures if the size changed. Creates
+     * {@link #GBUFFER_MRT_COUNT} RGBA8 color attachments (colortex0–3) plus a
+     * depth32Float depth attachment, each with render-attachment + shader-read
+     * usage and a view.
+     */
+    private static void ensureGbufferTargets(final MetalDevice device, final int width, final int height) {
+        if (gbufferColorTextures != null && gbufferTargetWidth == width && gbufferTargetHeight == height) {
+            return;
+        }
+        releaseGbufferTargets();
+        gbufferColorTextures = new GpuTexture[GBUFFER_MRT_COUNT];
+        gbufferColorViews = new MetalGpuTextureView[GBUFFER_MRT_COUNT];
+        int usage = GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_TEXTURE_BINDING;
+        for (int i = 0; i < GBUFFER_MRT_COUNT; i++) {
+            gbufferColorTextures[i] = device.createTexture(
+                    "iris_gbuffer_colortex" + i, usage,
+                    GpuFormat.RGBA8_UNORM, width, height, 1, 1);
+            gbufferColorViews[i] = (MetalGpuTextureView) device.createTextureView(gbufferColorTextures[i]);
+        }
+        gbufferDepthTexture = device.createTexture(
+                "iris_gbuffer_depth", usage,
+                GpuFormat.D32_FLOAT, width, height, 1, 1);
+        gbufferDepthView = (MetalGpuTextureView) device.createTextureView(gbufferDepthTexture);
+        gbufferTargetWidth = width;
+        gbufferTargetHeight = height;
+    }
+
+    /**
+     * Releases the gbuffer MRT pool (color attachments + depth). Native handles
+     * are reclaimed via the device's deferred-release queue.
+     */
+    private static void releaseGbufferTargets() {
+        closeViewSet(gbufferColorViews, gbufferColorTextures);
+        if (gbufferDepthView != null) {
+            try {
+                gbufferDepthView.close();
+            } catch (Exception ignored) {
+            }
+            gbufferDepthView = null;
+        }
+        if (gbufferDepthTexture != null) {
+            try {
+                gbufferDepthTexture.close();
+            } catch (Exception ignored) {
+            }
+            gbufferDepthTexture = null;
+        }
+        gbufferColorViews = null;
+        gbufferColorTextures = null;
+        gbufferTargetWidth = 0;
+        gbufferTargetHeight = 0;
+    }
+
+    /**
+     * Returns the gbuffer color attachment views (colortex0–3), or {@code null}
+     * if the pool is not initialized. Composite/deferred passes bind these as
+     * samplers to read the scene's gbuffer output.
+     */
+    static MetalGpuTextureView[] getGbufferColorViews() {
+        return gbufferColorViews;
+    }
+
+    /**
+     * Returns the gbuffer depth attachment view, or {@code null} if the pool is
+     * not initialized. Composite/deferred passes sample this to reconstruct
+     * view-space position.
+     */
+    static MetalGpuTextureView getGbufferDepthView() {
+        return gbufferDepthView;
+    }
+
+    // ---- Shadow map target (M4h) ----
+
+    /**
+     * Ensures the shadow-map depth target exists. Creates a square
+     * depth32Float texture at {@link #SHADOW_MAP_SIZE} plus a 1×1 RGBA8 dummy
+     * color attachment (the render-encoder wrapper requires a non-null color
+     * attachment; the shadow pass disables color writes, so the dummy is
+     * never written to).
+     */
+    private static void ensureShadowTarget(final MetalDevice device) {
+        if (shadowDepthTexture != null) {
+            return;
+        }
+        int usage = GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_TEXTURE_BINDING;
+        shadowDepthTexture = device.createTexture(
+                "iris_shadow_depth", usage,
+                GpuFormat.D32_FLOAT, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, 1, 1);
+        shadowDepthView = (MetalGpuTextureView) device.createTextureView(shadowDepthTexture);
+        shadowDummyColorTexture = device.createTexture(
+                "iris_shadow_dummy_color", GpuTexture.USAGE_RENDER_ATTACHMENT,
+                GpuFormat.RGBA8_UNORM, 1, 1, 1, 1);
+        shadowDummyColorView = (MetalGpuTextureView) device.createTextureView(shadowDummyColorTexture);
+    }
+
+    /**
+     * Releases the shadow-map depth target and dummy color attachment.
+     */
+    private static void releaseShadowTarget() {
+        if (shadowDepthView != null) {
+            try {
+                shadowDepthView.close();
+            } catch (Exception ignored) {
+            }
+            shadowDepthView = null;
+        }
+        if (shadowDepthTexture != null) {
+            try {
+                shadowDepthTexture.close();
+            } catch (Exception ignored) {
+            }
+            shadowDepthTexture = null;
+        }
+        if (shadowDummyColorView != null) {
+            try {
+                shadowDummyColorView.close();
+            } catch (Exception ignored) {
+            }
+            shadowDummyColorView = null;
+        }
+        if (shadowDummyColorTexture != null) {
+            try {
+                shadowDummyColorTexture.close();
+            } catch (Exception ignored) {
+            }
+            shadowDummyColorTexture = null;
+        }
+    }
+
+    /**
+     * Returns the shadow-map depth view, or {@code null} if not initialized.
+     * Composite/deferred passes sample this to compute shadow occlusion.
+     */
+    static MetalGpuTextureView getShadowMapView() {
+        return shadowDepthView;
+    }
+
+    /**
+     * Public entry point for {@link com.metallum.client.metal.iris.MetalIrisRenderingPipeline#beginLevelRendering}
+     * to ensure the gbuffer MRT pool and shadow-map target exist (and match
+     * the current screen size) before the scene is rendered. Safe to call
+     * every frame — recreates the gbuffer pool only on size change, and the
+     * shadow target only once.
+     *
+     * @param width  screen/framebuffer width
+     * @param height screen/framebuffer height
+     */
+    public static void ensureGbufferAndShadowTargets(final int width, final int height) {
+        MetalDevice device = getMetalDevice();
+        if (device == null) {
+            return;
+        }
+        try {
+            ensureGbufferTargets(device, width, height);
+        } catch (Exception e) {
+            LOGGER.error("[MetalUniversal] Failed to ensure gbuffer targets", e);
+        }
+        try {
+            ensureShadowTarget(device);
+        } catch (Exception e) {
+            LOGGER.error("[MetalUniversal] Failed to ensure shadow target", e);
+        }
+    }
+
+    // ---- Geometry / shadow pass encoder API (M4h) ----
+
+    /**
+     * Begins an Iris gbuffers geometry pass: creates (or retrieves from cache)
+     * the gbuffers {@link MetalIrisPipeline} targeting the gbuffer MRT pool,
+     * then returns a render command encoder with the pipeline bound and the
+     * color/depth attachments cleared.
+     *
+     * <p>The returned encoder is ready for the caller to bind vertex/index
+     * buffers ({@link MTLRenderCommandEncoder#setBuffer}) and issue indexed
+     * draws ({@link MTLRenderCommandEncoder#drawIndexedPrimitives}). The
+     * caller is responsible for all per-draw state (vertex buffers, uniforms,
+     * textures, cull mode, etc.).
+     *
+     * <p>The encoder lifecycle is managed by {@link MetalCommandEncoder} — it
+     * is ended automatically when the next encoder is created or the command
+     * buffer is submitted. {@link #endGeometryPass} is provided for symmetry
+     * but is a no-op.
+     *
+     * @param name         gbuffers program name (e.g. "gbuffers_terrain")
+     * @param vertexMsl    compiled MSL vertex source for the gbuffers program
+     * @param fragmentMsl  compiled MSL fragment source for the gbuffers program
+     * @param width        viewport width (gbuffer target width)
+     * @param height       viewport height (gbuffer target height)
+     * @return the render command encoder, or {@code null} on failure
+     */
+    public static MTLRenderCommandEncoder beginGeometryPass(
+            final String name,
+            final String vertexMsl,
+            final String fragmentMsl,
+            final int width,
+            final int height
+    ) {
+        MetalDevice device = getMetalDevice();
+        if (device == null) {
+            LOGGER.warn("[MetalUniversal] Cannot begin geometry pass '{}': MetalDevice not available", name);
+            return null;
+        }
+
+        MTLPixelFormat[] colorFormats = new MTLPixelFormat[GBUFFER_MRT_COUNT];
+        Arrays.fill(colorFormats, MTLPixelFormat.RGBA8Unorm);
+
+        MetalIrisPipeline pipeline;
+        try {
+            pipeline = getOrCreatePipelineMulti(device, name, vertexMsl, fragmentMsl, colorFormats, true);
+        } catch (Exception e) {
+            LOGGER.error("[MetalUniversal] Failed to create gbuffers pipeline for '{}'", name, e);
+            return null;
+        }
+
+        try {
+            ensureGbufferTargets(device, width, height);
+        } catch (Exception e) {
+            LOGGER.error("[MetalUniversal] Failed to allocate gbuffer targets for '{}'", name, e);
+            return null;
+        }
+
+        try {
+            MetalCommandEncoder encoder = device.createCommandEncoder();
+            MTLRenderCommandEncoder renderEnc = encoder.renderCommandEncoderMulti(
+                    gbufferColorViews, GBUFFER_MRT_COUNT, gbufferDepthView,
+                    width, height,
+                    true, // clearColorEnabled — clear all color attachments to black
+                    0.0f, 0.0f, 0.0f, 0.0f,
+                    true, 1.0 // clearDepthEnabled — clear depth to far
+            );
+
+            renderEnc.setRenderPipelineState(pipeline.pipelineState(true));
+            if (pipeline.hasDepth()) {
+                renderEnc.setDepthStencilState(pipeline.depthStencilState());
+            }
+
+            LOGGER.info("[MetalUniversal] Began geometry pass '{}' ({} MRT attachments, {}x{})",
+                    name, GBUFFER_MRT_COUNT, width, height);
+            return renderEnc;
+        } catch (Throwable t) {
+            LOGGER.error("[MetalUniversal] Failed to begin geometry pass '{}'", name, t);
+            return null;
+        }
+    }
+
+    /**
+     * Ends the current geometry pass. This is a no-op — the render command
+     * encoder is ended automatically by {@link MetalCommandEncoder} when the
+     * next encoder is created or the command buffer is submitted. Provided for
+     * API symmetry with {@link #beginGeometryPass}.
+     */
+    public static void endGeometryPass() {
+        // Encoder lifecycle is managed by MetalCommandEncoder.
+    }
+
+    /**
+     * Begins an Iris shadow pass: creates (or retrieves from cache) the shadow
+     * {@link MetalIrisPipeline} targeting the shadow-map depth texture, then
+     * returns a render command encoder with the pipeline bound and depth
+     * cleared.
+     *
+     * <p>The shadow pass is depth-only (color writes disabled). A 1×1 dummy
+     * color attachment is bound because the render-encoder wrapper requires a
+     * non-null color attachment; the shadow program's fragment shader should
+     * not write color.
+     *
+     * <p>The returned encoder is ready for the caller to bind shadow-camera
+     * vertex/index buffers and issue draws. See {@link #beginGeometryPass} for
+     * the encoder-lifecycle contract.
+     *
+     * @param name        shadow program name (e.g. "shadow_solid")
+     * @param vertexMsl   compiled MSL vertex source for the shadow program
+     * @param fragmentMsl compiled MSL fragment source for the shadow program
+     * @return the render command encoder, or {@code null} on failure
+     */
+    public static MTLRenderCommandEncoder beginShadowPass(
+            final String name,
+            final String vertexMsl,
+            final String fragmentMsl
+    ) {
+        MetalDevice device = getMetalDevice();
+        if (device == null) {
+            LOGGER.warn("[MetalUniversal] Cannot begin shadow pass '{}': MetalDevice not available", name);
+            return null;
+        }
+
+        // Shadow pass: single RGBA8 dummy color attachment + depth32Float.
+        MetalIrisPipeline pipeline;
+        try {
+            pipeline = getOrCreatePipelineMulti(
+                    device, name, vertexMsl, fragmentMsl,
+                    new MTLPixelFormat[]{MTLPixelFormat.RGBA8Unorm}, true);
+        } catch (Exception e) {
+            LOGGER.error("[MetalUniversal] Failed to create shadow pipeline for '{}'", name, e);
+            return null;
+        }
+
+        try {
+            ensureShadowTarget(device);
+        } catch (Exception e) {
+            LOGGER.error("[MetalUniversal] Failed to allocate shadow target for '{}'", name, e);
+            return null;
+        }
+
+        try {
+            MetalCommandEncoder encoder = device.createCommandEncoder();
+            MTLRenderCommandEncoder renderEnc = encoder.renderCommandEncoder(
+                    shadowDummyColorView, shadowDepthView,
+                    SHADOW_MAP_SIZE, SHADOW_MAP_SIZE,
+                    true, // clearColorEnabled — clear the dummy color (harmless)
+                    0.0f, 0.0f, 0.0f, 0.0f,
+                    true, 1.0 // clearDepthEnabled — clear shadow depth to far
+            );
+
+            renderEnc.setRenderPipelineState(pipeline.pipelineState(true));
+            if (pipeline.hasDepth()) {
+                renderEnc.setDepthStencilState(pipeline.depthStencilState());
+            }
+
+            LOGGER.info("[MetalUniversal] Began shadow pass '{}' ({}x{})",
+                    name, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
+            return renderEnc;
+        } catch (Throwable t) {
+            LOGGER.error("[MetalUniversal] Failed to begin shadow pass '{}'", name, t);
+            return null;
+        }
+    }
+
+    /**
+     * Ends the current shadow pass. This is a no-op — see {@link #endGeometryPass}.
+     */
+    public static void endShadowPass() {
+        // Encoder lifecycle is managed by MetalCommandEncoder.
+    }
+
+    /**
+     * Clears the pipeline cache and all Iris render-target pools (composite,
+     * gbuffer, shadow). Called when the MetalIrisRenderingPipeline is destroyed
+     * (shaderpack reload) to free cached pipeline states and render targets.
      */
     public static void clearCache() {
         for (MetalIrisPipeline pipeline : pipelineCache.values()) {
@@ -662,5 +1071,12 @@ public final class MetalIrisRenderer {
         }
         pipelineCache.clear();
         releaseCompositeTargets();
+        releaseGbufferTargets();
+        releaseShadowTarget();
+        // Release any pending final-pass view that was never presented.
+        MetalGpuTextureView stale = pendingFinalPassView.getAndSet(null);
+        if (stale != null) {
+            closePendingView(stale);
+        }
     }
 }

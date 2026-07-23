@@ -377,7 +377,19 @@ public class MetalIrisRenderingPipeline implements WorldRenderingPipeline {
 
     @Override
     public void beginLevelRendering() {
-        // No-op: safe on Metal (no GL calls)
+        // M4h: Ensure the gbuffer MRT pool and shadow-map target exist for
+        // this frame, recreated on screen-size change. The actual gbuffers/
+        // shadow scene draws are not yet redirected through these targets
+        // (that requires intercepting vanilla's terrain/entity draws), but
+        // allocating them up-front keeps the render-target half of the
+        // geometry pass ready for when that redirect is added.
+        try {
+            int width = net.minecraft.client.Minecraft.getInstance().getWindow().getWidth();
+            int height = net.minecraft.client.Minecraft.getInstance().getWindow().getHeight();
+            MetalIrisRenderer.ensureGbufferAndShadowTargets(width, height);
+        } catch (Throwable t) {
+            LOGGER.warn("[MetalUniversal] beginLevelRendering: could not ensure gbuffer/shadow targets", t);
+        }
     }
 
     @Override
@@ -437,17 +449,19 @@ public class MetalIrisRenderingPipeline implements WorldRenderingPipeline {
 
     @Override
     public void finalizeLevelRendering() {
-        // M4e: Render the Iris fullscreen pass chain.
+        // M4e/M4g/M4h: Render the Iris fullscreen pass chain.
         //
         // Composite/deferred/prepare/shadowcomp passes are fullscreen passes
         // that write to multiple colortex outputs (MRT) — rendered via
-        // MetalIrisRenderer.renderCompositePass. The "final" pass is rendered
-        // last to a single RGBA8 target.
+        // MetalIrisRenderer.renderCompositePass (M4g ping-pong pool). The
+        // "final" pass is rendered last to a single RGBA8 target (M4f, handed
+        // to MetalSurface for presentation).
         //
-        // Geometry passes (gbuffers_*, shadow*, dh_*) are NOT rendered here —
-        // they require redirecting Minecraft's terrain/entity draws into the
-        // gbuffer MRT targets (vertex buffers, attribute binding), which is a
-        // separate, larger effort.
+        // The gbuffer MRT pool and shadow-map target are allocated up-front in
+        // beginLevelRendering (M4h) so composite passes can sample them, but
+        // the actual gbuffers/shadow scene draws are NOT yet redirected into
+        // those targets — that requires intercepting vanilla's terrain/entity
+        // draws (vertex buffers, attribute binding), a separate effort.
         //
         // All rendering is best-effort and wrapped in try/catch so a single
         // failing pass doesn't prevent the rest.
